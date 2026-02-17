@@ -420,7 +420,6 @@ impl LfsImage {
 /// mount/unmount lifecycle.
 pub struct MountedFs<'a> {
     state: &'a mut lfs::lfs_t,
-    #[allow(dead_code)]
     config: &'a lfs::lfs_config,
 }
 
@@ -475,7 +474,13 @@ impl<'a> MountedFs<'a> {
         unsafe {
             let state_ptr = self.state as *const lfs::lfs_t as *mut lfs::lfs_t;
             let mut file: lfs::lfs_file_t = std::mem::zeroed();
-            let file_cfg: lfs::lfs_file_config = std::mem::zeroed();
+
+            // lfs_file_opencfg requires a caller-supplied cache buffer
+            let cache_size = self.config.cache_size as usize;
+            let mut file_cache = vec![0u8; cache_size];
+            let mut file_cfg: lfs::lfs_file_config = std::mem::zeroed();
+            file_cfg.buffer = file_cache.as_mut_ptr() as *mut c_void;
+
             let flags = lfs::lfs_open_flags_LFS_O_WRONLY
                 | lfs::lfs_open_flags_LFS_O_CREAT
                 | lfs::lfs_open_flags_LFS_O_TRUNC;
@@ -521,7 +526,13 @@ impl<'a> MountedFs<'a> {
         unsafe {
             let state_ptr = self.state as *const lfs::lfs_t as *mut lfs::lfs_t;
             let mut file: lfs::lfs_file_t = std::mem::zeroed();
-            let file_cfg: lfs::lfs_file_config = std::mem::zeroed();
+
+            // lfs_file_opencfg requires a caller-supplied cache buffer
+            let cache_size = self.config.cache_size as usize;
+            let mut file_cache = vec![0u8; cache_size];
+            let mut file_cfg: lfs::lfs_file_config = std::mem::zeroed();
+            file_cfg.buffer = file_cache.as_mut_ptr() as *mut c_void;
+
             let flags = lfs::lfs_open_flags_LFS_O_RDONLY;
 
             check(lfs::lfs_file_opencfg(

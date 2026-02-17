@@ -44,6 +44,7 @@
           CC = "gcc";
           LIBCLANG_PATH = "${libclang.lib}/lib";
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
+          MKLITTLEFS_CPP = "./mklittlefs/mklittlefs";
         };
       }
     );
