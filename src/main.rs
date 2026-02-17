@@ -1,10 +1,10 @@
 use clap::{Args, Parser, Subcommand};
-use mklittlefs_rs::{LfsImage, LfsImageConfig};
+use littlefs2_pack::{LfsError, LfsImage, LfsImageConfig, MountedFs};
 use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
-    name = "mklittlefs-rs",
+    name = "littlefs2-pack",
     version,
     about = "Create, unpack, and inspect LittleFS2 filesystem images"
 )]
@@ -230,22 +230,20 @@ fn cmd_pack(args: Pack) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn pack_directory(
-    fs: &mklittlefs_rs::MountedFs<'_>,
+    fs: &MountedFs<'_>,
     host_dir: &std::path::Path,
     lfs_prefix: &str,
-) -> Result<(), mklittlefs_rs::LfsError> {
+) -> Result<(), LfsError> {
     let mut entries: Vec<_> = std::fs::read_dir(host_dir)
-        .map_err(|e| mklittlefs_rs::LfsError::Io(e.to_string()))?
+        .map_err(|e| LfsError::Io(e.to_string()))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| mklittlefs_rs::LfsError::Io(e.to_string()))?;
+        .map_err(|e| LfsError::Io(e.to_string()))?;
 
     // Sort for deterministic output
     entries.sort_by_key(|e| e.file_name());
 
     for entry in entries {
-        let file_type = entry
-            .file_type()
-            .map_err(|e| mklittlefs_rs::LfsError::Io(e.to_string()))?;
+        let file_type = entry.file_type().map_err(|e| LfsError::Io(e.to_string()))?;
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
 
@@ -260,8 +258,7 @@ fn pack_directory(
             fs.create_dir(&lfs_path)?;
             pack_directory(fs, &entry.path(), &lfs_path)?;
         } else if file_type.is_file() {
-            let data = std::fs::read(entry.path())
-                .map_err(|e| mklittlefs_rs::LfsError::Io(e.to_string()))?;
+            let data = std::fs::read(entry.path()).map_err(|e| LfsError::Io(e.to_string()))?;
             println!("  write  {lfs_path} ({} bytes)", data.len());
             fs.write_file(&lfs_path, &data)?;
         }
@@ -294,10 +291,10 @@ fn cmd_unpack(args: Unpack) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn unpack_directory(
-    fs: &mklittlefs_rs::MountedFs<'_>,
+    fs: &MountedFs<'_>,
     lfs_dir: &str,
     host_dir: &std::path::Path,
-) -> Result<(), mklittlefs_rs::LfsError> {
+) -> Result<(), LfsError> {
     let entries = fs.read_dir(lfs_dir)?;
 
     for entry in entries {
@@ -309,13 +306,11 @@ fn unpack_directory(
         };
 
         if entry.is_dir {
-            std::fs::create_dir_all(&host_path)
-                .map_err(|e| mklittlefs_rs::LfsError::Io(e.to_string()))?;
+            std::fs::create_dir_all(&host_path).map_err(|e| LfsError::Io(e.to_string()))?;
             unpack_directory(fs, &lfs_child, &host_path)?;
         } else {
             let data = fs.read_file(&lfs_child)?;
-            std::fs::write(&host_path, &data)
-                .map_err(|e| mklittlefs_rs::LfsError::Io(e.to_string()))?;
+            std::fs::write(&host_path, &data).map_err(|e| LfsError::Io(e.to_string()))?;
             println!("  extract {} ({} bytes)", host_path.display(), data.len());
         }
     }
@@ -337,11 +332,7 @@ fn cmd_list(args: ListCmd) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn list_directory(
-    fs: &mklittlefs_rs::MountedFs<'_>,
-    lfs_dir: &str,
-    depth: usize,
-) -> Result<(), mklittlefs_rs::LfsError> {
+fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, depth: usize) -> Result<(), LfsError> {
     let entries = fs.read_dir(lfs_dir)?;
     let indent = "  ".repeat(depth);
 

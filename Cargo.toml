@@ -1,11 +1,10 @@
 [package]
-name = "mklittlefs-rs"
+name = "littlefs2-pack"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.46", features = ["derive"] }
 littlefs2-core = "0.1.2"
-# littlefs2 = { version = "0.6.1", default-features = false, features = ["c-stubs"] }
 littlefs2-sys = { version = "0.3.1", features = ["multiversion"] }
 thiserror = "2.0.18"

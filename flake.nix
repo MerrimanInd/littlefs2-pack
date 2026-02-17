@@ -1,5 +1,5 @@
 {
-  description = "mklittlefs-rs";
+  description = "littlefs2-pack";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

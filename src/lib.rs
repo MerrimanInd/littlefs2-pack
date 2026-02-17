@@ -1,4 +1,4 @@
-//! # mklittlefs-rs
+//! # littlefs2-pack
 //!
 //! A library for creating, reading, and manipulating LittleFS2 filesystem images
 //! in memory. Designed for building binary images that can be flashed to a
@@ -11,7 +11,7 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use mklittlefs_rs::{LfsImage, LfsImageConfig};
+//! use littlefs2_pack::{LfsImage, LfsImageConfig};
 //!
 //! let config = LfsImageConfig {
 //!     block_size: 4096,
