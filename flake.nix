@@ -34,9 +34,14 @@
             # C libs
             clang
             libclang.lib
+            cmake
+            gnumake
+            gcc
 
           ];
 
+          AR = "ar";
+          CC = "gcc";
           LIBCLANG_PATH = "${libclang.lib}/lib";
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
         };

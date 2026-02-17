@@ -1,0 +1,3 @@
+[submodule "mklittlefs"]
+	path = mklittlefs
+	url = https://github.com/earlephilhower/mklittlefs
