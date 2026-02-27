@@ -5,13 +5,14 @@
 //! `mklittlefs` is not found on `$PATH`. Override the path by setting the
 //! `MKLITTLEFS_CPP` environment variable.
 //!
-//! The Rust binary is obtained via `env!("CARGO_BIN_EXE_mklittlefs-rs")` which
+//! The Rust binary is obtained via `env!("CARGO_BIN_EXE_littlefs2-pack")` which
 //! cargo populates automatically for integration tests.
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tempfile::TempDir;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ const IMAGE_SIZE: u32 = 131072; // 128 KiB
 /// Return the path to the Rust binary under test.
 fn rs_bin() -> PathBuf {
     // CARGO_BIN_EXE_<name> is set by cargo for [[bin]] targets in integration tests.
-    PathBuf::from(env!("CARGO_BIN_EXE_mklittlefs-rs"))
+    PathBuf::from(env!("CARGO_BIN_EXE_littlefs2-pack"))
 }
 
 /// Return the path to the C++ mklittlefs, or `None` if unavailable.
@@ -264,10 +265,10 @@ fn rs_list(image: &Path) -> String {
 /// Rust pack → Rust unpack (always runs, no C++ dependency).
 #[test]
 fn rust_self_roundtrip() {
-    let tmp = tempdir("rust_self");
-    let fixture = tmp.join("fixture");
-    let image = tmp.join("image.bin");
-    let unpacked = tmp.join("unpacked");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let image = tmp.path().join("image.bin");
+    let unpacked = tmp.path().join("unpacked");
 
     create_fixture(&fixture);
     rs_pack(&fixture, &image);
@@ -285,11 +286,10 @@ fn cpp_pack_rust_unpack() {
             return;
         }
     };
-
-    let tmp = tempdir("cpp_pack_rs_unpack");
-    let fixture = tmp.join("fixture");
-    let image = tmp.join("image.bin");
-    let unpacked = tmp.join("unpacked");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let image = tmp.path().join("image.bin");
+    let unpacked = tmp.path().join("unpacked");
 
     create_fixture(&fixture);
     cpp_pack(&cpp, &fixture, &image);
@@ -308,10 +308,10 @@ fn rust_pack_cpp_unpack() {
         }
     };
 
-    let tmp = tempdir("rs_pack_cpp_unpack");
-    let fixture = tmp.join("fixture");
-    let image = tmp.join("image.bin");
-    let unpacked = tmp.join("unpacked");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let image = tmp.path().join("image.bin");
+    let unpacked = tmp.path().join("unpacked");
 
     create_fixture(&fixture);
     rs_pack(&fixture, &image);
@@ -330,9 +330,9 @@ fn cpp_pack_rust_list() {
         }
     };
 
-    let tmp = tempdir("cpp_pack_rs_list");
-    let fixture = tmp.join("fixture");
-    let image = tmp.join("image.bin");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let image = tmp.path().join("image.bin");
 
     create_fixture(&fixture);
     cpp_pack(&cpp, &fixture, &image);
@@ -366,9 +366,9 @@ fn rust_pack_cpp_list() {
         }
     };
 
-    let tmp = tempdir("rs_pack_cpp_list");
-    let fixture = tmp.join("fixture");
-    let image = tmp.join("image.bin");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let image = tmp.path().join("image.bin");
 
     create_fixture(&fixture);
     rs_pack(&fixture, &image);
@@ -406,8 +406,8 @@ fn small_block_roundtrip() {
     let ps = 16u32;
     let sz = 65536u32; // 256 blocks
 
-    let tmp = tempdir("small_blocks");
-    let fixture = tmp.join("fixture");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
     fs::create_dir_all(&fixture).unwrap();
     fs::write(fixture.join("test.txt"), b"small blocks!\n").unwrap();
     fs::create_dir_all(fixture.join("d")).unwrap();
@@ -415,8 +415,8 @@ fn small_block_roundtrip() {
 
     // C++ → Rust
     {
-        let image = tmp.join("small_cpp.bin");
-        let unpacked = tmp.join("small_rs_out");
+        let image = tmp.path().join("small_cpp.bin");
+        let unpacked = tmp.path().join("small_rs_out");
 
         let st = Command::new(&cpp)
             .args([
@@ -455,8 +455,8 @@ fn small_block_roundtrip() {
 
     // Rust → C++
     {
-        let image = tmp.join("small_rs.bin");
-        let unpacked = tmp.join("small_cpp_out");
+        let image = tmp.path().join("small_rs.bin");
+        let unpacked = tmp.path().join("small_cpp_out");
 
         let st = Command::new(rs_bin())
             .args([
@@ -509,12 +509,12 @@ fn full_roundtrip_rs_cpp_rs() {
         }
     };
 
-    let tmp = tempdir("full_roundtrip");
-    let fixture = tmp.join("fixture");
-    let img1 = tmp.join("img1.bin");
-    let mid = tmp.join("mid");
-    let img2 = tmp.join("img2.bin");
-    let final_out = tmp.join("final");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let img1 = tmp.path().join("img1.bin");
+    let mid = tmp.path().join("mid");
+    let img2 = tmp.path().join("img2.bin");
+    let final_out = tmp.path().join("final");
 
     create_fixture(&fixture);
 
@@ -554,9 +554,10 @@ fn custom_fixture_rust_roundtrip() {
         fixture.display()
     );
 
-    let tmp = tempdir("custom_rs");
-    let image = tmp.join("custom.bin");
-    let unpacked = tmp.join("unpacked");
+    let tmp = TempDir::new().unwrap();
+    let fixture = tmp.path().join("fixture");
+    let image = tmp.path().join("custom.bin");
+    let unpacked = tmp.path().join("unpacked");
 
     rs_pack(&fixture, &image);
     rs_unpack(&image, &unpacked);
@@ -583,9 +584,9 @@ fn custom_fixture_rust_pack_cpp_unpack() {
     };
     assert!(fixture.is_dir());
 
-    let tmp = tempdir("custom_rs_cpp");
-    let image = tmp.join("custom.bin");
-    let unpacked = tmp.join("unpacked");
+    let tmp = TempDir::new().unwrap();
+    let image = tmp.path().join("custom.bin");
+    let unpacked = tmp.path().join("unpacked");
 
     rs_pack(&fixture, &image);
     cpp_unpack(&cpp, &image, &unpacked);
@@ -612,23 +613,11 @@ fn custom_fixture_cpp_pack_rust_unpack() {
     };
     assert!(fixture.is_dir());
 
-    let tmp = tempdir("custom_cpp_rs");
-    let image = tmp.join("custom.bin");
-    let unpacked = tmp.join("unpacked");
+    let tmp = TempDir::new().unwrap();
+    let image = tmp.path().join("custom.bin");
+    let unpacked = tmp.path().join("unpacked");
 
     cpp_pack(&cpp, &fixture, &image);
     rs_unpack(&image, &unpacked);
     assert_trees_match(&fixture, &unpacked);
-}
-
-// ── Temp dir helper ─────────────────────────────────────────────────────
-
-fn tempdir(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("mklittlefs_rs_test_{name}_{}", std::process::id()));
-    if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap();
-    }
-    fs::create_dir_all(&dir).unwrap();
-    dir
 }

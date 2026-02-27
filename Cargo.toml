@@ -8,3 +8,6 @@ clap = { version = "4.5.46", features = ["derive"] }
 littlefs2-core = "0.1.2"
 littlefs2-sys = { version = "0.3.1", features = ["multiversion"] }
 thiserror = "2.0.18"
+
+[dev-dependencies]
+tempfile = "3"
