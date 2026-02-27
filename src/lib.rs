@@ -1,12 +1,20 @@
 //! # littlefs2-pack
 //!
-//! A library for creating, reading, and manipulating LittleFS2 filesystem images
-//! in memory. Designed for building binary images that can be flashed to a
-//! microcontroller's storage.
+//! A Rust crate for building a file system into a LittleFS
+//! binary file to be flashed to an embedded device.
 //!
-//! Uses `littlefs2-sys` (raw C FFI) directly so that block size, block count,
-//! and page sizes can be configured at **runtime** — unlike the generic-array
-//! based `littlefs2::driver::Storage` trait which requires compile-time constants.
+//! This crate wraps the [LittleFS C library](https://github.com/littlefs-project/littlefs)
+//! using the [`littlefs2-sys`](https://crates.io/crates/littlefs2-sys) crate. The [`littlefs2`](https://crates.io/crates/littlefs2) crate
+//! might have been an easier starting point but it doesn't
+//! currently allow setting the image configuration dynamically
+//!  at runtime, such as the block size and count.
+//!
+//! `littlefs2-pack` is tested for compatibility with the C++
+//! [`mklittlefs` project](https://github.com/earlephilhower/mklittlefs). This is ensured with the `cross-compat.rs`
+//! test that packs with one tool then unpack with the other,
+//! in both directions. These tests are ran against the version of
+//! `mklittlefs` in the submodule and requires that tool to be built
+//! prior to running the tests.
 //!
 //! ## Example
 //!
