@@ -20,32 +20,71 @@
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
+
+        cargoTomlTool = fromTOML (builtins.readFile "${self}/littlefs2-tool/Cargo.toml");
+
+        cDeps = with pkgs; [
+          clang
+          cmake
+          gnumake
+          gcc
+        ];
+
+        cLibs = with pkgs; [
+          libclang.lib
+        ];
+
+        cEnv = {
+          AR = "ar";
+          CC = "gcc";
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+        };
       in
       with pkgs;
       {
-        devShells.default = mkShell rec {
-          buildInputs = [
-            # Rust
-            rust-bin.stable.latest.default
+        devShells.default = mkShell (
+          cEnv
+          // {
+            buildInputs = [
+              rust-bin.stable.latest.default
+              pkg-config
+            ]
+            ++ cDeps
+            ++ cLibs;
 
-            # misc. libraries
-            pkg-config
+            LD_LIBRARY_PATH = "${lib.makeLibraryPath (cDeps ++ cLibs)}";
+            MKLITTLEFS_CPP = "./mklittlefs/mklittlefs";
+          }
+        );
 
-            # C libs
-            clang
-            libclang.lib
-            cmake
-            gnumake
-            gcc
+        packages.default = rustPlatform.buildRustPackage (
+          cEnv
+          // {
+            pname = cargoTomlTool.package.name;
+            version = cargoTomlTool.package.version;
+            src = self;
+            meta.mainProgram = "littlefs";
 
-          ];
+            cargoLock = {
+              lockFile = "${self}/Cargo.lock";
+              outputHashes = { };
+            };
 
-          AR = "ar";
-          CC = "gcc";
-          LIBCLANG_PATH = "${libclang.lib}/lib";
-          LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
-          MKLITTLEFS_CPP = "./mklittlefs/mklittlefs";
-        };
+            nativeBuildInputs = [ pkg-config ] ++ cDeps;
+            buildInputs = cLibs;
+
+            cargoBuildFlags = [
+              "--package"
+              "littlefs2-tool"
+            ];
+            cargoTestFlags = [
+              "--package"
+              "littlefs2-tool"
+            ];
+
+            postInstall = "";
+          }
+        );
       }
     );
 }
