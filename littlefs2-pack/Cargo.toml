@@ -1,0 +1,24 @@
+[package]
+name = "littlefs2-pack"
+description = "A Rust crate for building a file system into a LittleFS binary file to be flashed to an embedded device"
+version = "0.1.0"
+edition = "2024"
+authors = ["Xander Cesari <xander@merriman.industries>"]
+repository = "https://github.com/MerrimanInd/littlefs2-pack"
+documentation = "https://docs.rs/littlefs2_pack"
+categories = [
+  "embedded",
+  "filesystem",
+  "development-tools::build-utils",
+  "command-line-utilities",
+]
+license = "MIT"
+
+[dependencies]
+clap = { version = "4.5.46", features = ["derive"] }
+littlefs2-core = "0.1.2"
+littlefs2-sys = { version = "0.3.1", features = ["multiversion"] }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+tempfile = "3"
