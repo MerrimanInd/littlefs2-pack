@@ -19,14 +19,15 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use littlefs2_pack::{LfsImage, LfsImageConfig};
+//! use littlefs2_pack::LfsImage;
+//! use littlefs2_config::ImageConfig;
 //!
-//! let config = LfsImageConfig {
-//!     block_size: 4096,
-//!     block_count: 256,  // 1 MiB total
-//!     read_size: 256,
-//!     write_size: 256,
-//! };
+//! let config = ImageConfig::new(
+//!     4096, // block_size
+//!     256,  // block_count, 1 MiB total
+//!     256, // read_size
+//!     256, // write_size
+//! );
 //!
 //! let mut image = LfsImage::new(config).unwrap();
 //! image.format().unwrap();
@@ -184,11 +185,11 @@ pub struct LfsImage {
 
 impl LfsImage {
     /// Create a new blank image, initialized to 0xFF (erased flash state).
-    pub fn new(config: LfsImageConfig) -> Result<Self, LfsError> {
-        config.validate()?;
-        let total = config.total_size();
-        let cache_sz = config.cache_size() as usize;
-        let la_sz = config.lookahead_size() as usize;
+    pub fn new(config: ImageConfig) -> Result<Self, LfsError> {
+        validate_for_lfs(&config)?;
+        let total = config.image_size();
+        let cache_sz = cache_size(&config) as usize;
+        let la_sz = lookahead_size(&config) as usize;
 
         Ok(LfsImage {
             data: vec![0xFF; total],
@@ -200,9 +201,9 @@ impl LfsImage {
     }
 
     /// Create an image from existing data (e.g. read from a .bin file).
-    pub fn from_data(config: LfsImageConfig, data: Vec<u8>) -> Result<Self, LfsError> {
-        config.validate()?;
-        let expected = config.total_size();
+    pub fn from_data(config: ImageConfig, data: Vec<u8>) -> Result<Self, LfsError> {
+        validate_for_lfs(&config)?;
+        let expected = config.image_size();
         if data.len() != expected {
             return Err(LfsError::InvalidConfig(format!(
                 "data length ({}) doesn't match expected image size ({})",
@@ -210,8 +211,8 @@ impl LfsImage {
                 expected
             )));
         }
-        let cache_sz = config.cache_size() as usize;
-        let la_sz = config.lookahead_size() as usize;
+        let cache_sz = cache_size(&config) as usize;
+        let la_sz = lookahead_size(&config) as usize;
 
         Ok(LfsImage {
             data,
@@ -233,7 +234,7 @@ impl LfsImage {
     }
 
     /// Get the configuration.
-    pub fn config(&self) -> &LfsImageConfig {
+    pub fn config(&self) -> &ImageConfig {
         &self.config
     }
 
@@ -252,13 +253,13 @@ impl LfsImage {
             prog: Some(Self::lfs_prog),
             erase: Some(Self::lfs_erase),
             sync: Some(Self::lfs_sync),
-            read_size: self.config.read_size(),
-            prog_size: self.config.write_size(),
-            block_size: self.config.block_size(),
-            block_count: self.config.block_count(),
+            read_size: self.config.read_size() as u32,
+            prog_size: self.config.write_size() as u32,
+            block_size: self.config.block_size() as u32,
+            block_count: self.config.block_count() as u32,
             block_cycles: -1, // disable wear leveling for image creation
-            cache_size: self.config.cache_size(),
-            lookahead_size: self.config.lookahead_size(),
+            cache_size: cache_size(&self.config) as u32,
+            lookahead_size: lookahead_size(&self.config) as u32,
             read_buffer: self.read_cache.as_mut_ptr() as *mut c_void,
             prog_buffer: self.write_cache.as_mut_ptr() as *mut c_void,
             lookahead_buffer: self.lookahead_buf.as_mut_ptr() as *mut c_void,
@@ -676,13 +677,8 @@ impl<'a> MountedFs<'a> {
 mod tests {
     use super::*;
 
-    fn test_config() -> LfsImageConfig {
-        LfsImageConfig {
-            block_size: 4096,
-            block_count: 16,
-            read_size: 256,
-            write_size: 256,
-        }
+    fn test_config() -> ImageConfig {
+        ImageConfig::new(4096, 16, 256, 256)
     }
 
     #[test]
@@ -803,12 +799,7 @@ mod tests {
 
     #[test]
     fn small_block_size() {
-        let config = LfsImageConfig {
-            block_size: 128,
-            block_count: 64,
-            read_size: 16,
-            write_size: 16,
-        };
+        let config = ImageConfig::new(128, 64, 16, 16);
         let mut image = LfsImage::new(config).unwrap();
         image.format().unwrap();
 

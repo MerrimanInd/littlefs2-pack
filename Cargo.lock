@@ -479,6 +479,7 @@ dependencies = [
  "anyhow",
  "clap",
  "ignore",
+ "littlefs2-config",
  "littlefs2-pack",
  "serde",
  "serde_json",
