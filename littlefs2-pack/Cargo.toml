@@ -11,6 +11,7 @@ license = "MIT"
 
 [dependencies]
 clap = { version = "4.5.46", features = ["derive"] }
+littlefs2-config = { version = "0.1.0", path = "../littlefs2-config" }
 littlefs2-core = "0.1.2"
 littlefs2-sys = { version = "0.3.1", features = ["multiversion"] }
 thiserror = "2.0.18"

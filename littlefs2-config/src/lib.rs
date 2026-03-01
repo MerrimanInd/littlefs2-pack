@@ -156,11 +156,24 @@ pub struct ImageConfig {
 }
 
 impl ImageConfig {
-    /// The filesystem block (erase unit) size in bytes.
+    // The filesystem block (erase unit) size in bytes.
     accessor!(block_size -> usize);
 
-    /// Block-cycle count for wear leveling. -1 disables wear leveling.
+    // Block-cycle count for wear leveling. -1 disables wear leveling.
     accessor!(block_cycles -> i32);
+
+    // Create a new ImageConfig object, mainly for testing purposes
+    pub fn new(block_size: usize, block_count: usize, read_size: usize, write_size: usize) -> Self {
+        Self {
+            block_size,
+            block_count: Some(block_count),
+            image_size: None,
+            page_size: None,
+            read_size: Some(read_size),
+            write_size: Some(write_size),
+            block_cycles: -1,
+        }
+    }
 
     /// Validate that the image configuration is internally consistent.
     fn validate(&self) -> Result<(), ConfigError> {

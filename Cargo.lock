@@ -456,6 +456,7 @@ name = "littlefs2-pack"
 version = "0.2.0"
 dependencies = [
  "clap",
+ "littlefs2-config",
  "littlefs2-core",
  "littlefs2-sys",
  "thiserror",

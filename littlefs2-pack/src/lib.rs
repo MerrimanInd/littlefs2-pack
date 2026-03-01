@@ -44,6 +44,7 @@
 use std::ffi::{CString, c_int, c_void};
 use std::ptr;
 
+use littlefs2_config::ImageConfig;
 use littlefs2_sys as lfs;
 
 // ---------------------------------------------------------------------------
@@ -115,79 +116,47 @@ fn to_cpath(path: &str) -> Result<CString, LfsError> {
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-
-/// Configuration for creating an LfsImage.
-#[derive(Debug, Clone)]
-pub struct LfsImageConfig {
-    /// Size of an erasable block in bytes. Must be >= 128 and a multiple of
-    /// `read_size` and `write_size`.
-    pub block_size: u32,
-
-    /// Number of erasable blocks in the filesystem.
-    pub block_count: u32,
-
-    /// Minimum size of a read operation in bytes. Also used as cache size.
-    pub read_size: u32,
-
-    /// Minimum size of a write (program) operation in bytes.
-    pub write_size: u32,
+/// Validate that the config values are acceptable to the LittleFS C library.
+fn validate_for_lfs(config: &ImageConfig) -> Result<(), LfsError> {
+    if config.block_size() < 128 {
+        return Err(LfsError::InvalidConfig("block_size must be >= 128".into()));
+    }
+    if config.block_count() == 0 {
+        return Err(LfsError::InvalidConfig("block_count must be > 0".into()));
+    }
+    if config.read_size() == 0 || config.write_size() == 0 {
+        return Err(LfsError::InvalidConfig(
+            "read_size and write_size must be > 0".into(),
+        ));
+    }
+    if config.block_size() % config.read_size() != 0 {
+        return Err(LfsError::InvalidConfig(
+            "block_size must be a multiple of read_size".into(),
+        ));
+    }
+    if config.block_size() % config.write_size() != 0 {
+        return Err(LfsError::InvalidConfig(
+            "block_size must be a multiple of write_size".into(),
+        ));
+    }
+    Ok(())
 }
 
-impl LfsImageConfig {
-    /// Total image size in bytes.
-    pub fn total_size(&self) -> usize {
-        self.block_size as usize * self.block_count as usize
+/// Determine a good cache size for the LittleFS C config.
+fn cache_size(config: &ImageConfig) -> usize {
+    let base = config.read_size().max(config.write_size());
+    if config.block_size() % base == 0 {
+        base
+    } else {
+        config.block_size()
     }
+}
 
-    /// Validate the configuration.
-    fn validate(&self) -> Result<(), LfsError> {
-        if self.block_size < 128 {
-            return Err(LfsError::InvalidConfig("block_size must be >= 128".into()));
-        }
-        if self.block_count == 0 {
-            return Err(LfsError::InvalidConfig("block_count must be > 0".into()));
-        }
-        if self.read_size == 0 || self.write_size == 0 {
-            return Err(LfsError::InvalidConfig(
-                "read_size and write_size must be > 0".into(),
-            ));
-        }
-        if self.block_size % self.read_size != 0 {
-            return Err(LfsError::InvalidConfig(
-                "block_size must be a multiple of read_size".into(),
-            ));
-        }
-        if self.block_size % self.write_size != 0 {
-            return Err(LfsError::InvalidConfig(
-                "block_size must be a multiple of write_size".into(),
-            ));
-        }
-        Ok(())
-    }
-
-    /// Determine a good cache size. Must be a multiple of both read_size and
-    /// write_size and a factor of block_size. We pick the larger of
-    /// read_size / write_size as a starting point, ensuring it divides block_size.
-    fn cache_size(&self) -> u32 {
-        let base = self.read_size.max(self.write_size);
-        // Ensure it's a factor of block_size
-        if self.block_size % base == 0 {
-            base
-        } else {
-            // Fallback: use block_size itself (always a factor of itself)
-            self.block_size
-        }
-    }
-
-    /// Lookahead size in bytes — must be a multiple of 8.
-    fn lookahead_size(&self) -> u32 {
-        // Use 16 bytes (128 bits) minimum, enough for 128 blocks.
-        // Scale up for large filesystems.
-        let bits_needed = self.block_count;
-        let bytes_needed = (bits_needed + 7) / 8;
-        let aligned = ((bytes_needed + 7) / 8) * 8; // round up to multiple of 8
-        aligned.max(16)
-    }
+/// Lookahead size in bytes — must be a multiple of 8.
+fn lookahead_size(config: &ImageConfig) -> usize {
+    let bytes_needed = (config.block_count() + 7) / 8;
+    let aligned = ((bytes_needed + 7) / 8) * 8;
+    aligned.max(16)
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +172,7 @@ pub struct LfsImage {
     data: Vec<u8>,
 
     /// Our configuration.
-    config: LfsImageConfig,
+    config: ImageConfig,
 
     /// Heap-allocated read cache buffer.
     read_cache: Vec<u8>,
@@ -283,10 +252,10 @@ impl LfsImage {
             prog: Some(Self::lfs_prog),
             erase: Some(Self::lfs_erase),
             sync: Some(Self::lfs_sync),
-            read_size: self.config.read_size,
-            prog_size: self.config.write_size,
-            block_size: self.config.block_size,
-            block_count: self.config.block_count,
+            read_size: self.config.read_size(),
+            prog_size: self.config.write_size(),
+            block_size: self.config.block_size(),
+            block_count: self.config.block_count(),
             block_cycles: -1, // disable wear leveling for image creation
             cache_size: self.config.cache_size(),
             lookahead_size: self.config.lookahead_size(),
