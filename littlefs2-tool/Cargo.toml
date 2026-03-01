@@ -1,7 +1,22 @@
 [package]
 name = "littlefs2-tool"
+description = "A Rust packing and unpacking directories into LittleFS binaries then shipping them to embedded devices"
 version = "0.1.0"
 edition = "2024"
+authors = ["Xander Cesari <xander@merriman.industries>"]
+repository = "https://github.com/MerrimanInd/littlefs2-tool"
+documentation = "https://docs.rs/littlefs2_tool"
+categories = [
+  "embedded",
+  "filesystem",
+  "development-tools::build-utils",
+  "command-line-utilities",
+]
+license = "MIT"
+
+[[bin]]
+name = "littlefs"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.102"
@@ -12,3 +27,6 @@ serde_json = "1.0.149"
 sha2 = "0.10.9"
 thiserror = "2.0.18"
 littlefs2-pack = { path = "../littlefs2-pack" }
+
+[dev-dependencies]
+tempfile = "3"

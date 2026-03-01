@@ -5,7 +5,7 @@
 //! `mklittlefs` is not found on `$PATH`. Override the path by setting the
 //! `MKLITTLEFS_CPP` environment variable.
 //!
-//! The Rust binary is obtained via `env!("CARGO_BIN_EXE_littlefs2-pack")` which
+//! The Rust binary is obtained via `env!("CARGO_BIN_EXE_littlefs")` which
 //! cargo populates automatically for integration tests.
 
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ const IMAGE_SIZE: u32 = 131072; // 128 KiB
 /// Return the path to the Rust binary under test.
 fn rs_bin() -> PathBuf {
     // CARGO_BIN_EXE_<name> is set by cargo for [[bin]] targets in integration tests.
-    PathBuf::from(env!("CARGO_BIN_EXE_littlefs2-pack"))
+    PathBuf::from(env!("CARGO_BIN_EXE_littlefs"))
 }
 
 /// Return the path to the C++ mklittlefs, or `None` if unavailable.
