@@ -27,23 +27,3 @@ image.mount_and_then(|fs| {
 let binary = image.into_data();
 std::fs::write("filesystem.bin", &binary).unwrap();
 ```
-
-
-## CLI
-
-The command line interface allows for manually packing, unpacking, and inspecting LittleFS2 images.
-
-```bash
-Usage: littlefs2-pack <COMMAND>
-
-Commands:
-  pack    Pack a directory into a LittleFS2 image
-  unpack  Unpack a LittleFS2 image into a directory
-  list    List files in a LittleFS2 image
-  info    Print info about a LittleFS2 image (block count, used space, etc.)
-  help    Print this message or the help of the given subcommand(s)
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
-```

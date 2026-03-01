@@ -1,7 +1,7 @@
 [package]
 name = "littlefs2-pack"
 description = "A Rust crate for building a file system into a LittleFS binary file to be flashed to an embedded device"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Xander Cesari <xander@merriman.industries>"]
 repository = "https://github.com/MerrimanInd/littlefs2-pack"

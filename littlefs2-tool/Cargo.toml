@@ -7,8 +7,8 @@ edition = "2024"
 anyhow = "1.0.102"
 clap = { version = "4.5.60", features = ["derive"] }
 ignore = "0.4.25"
-littlefs2-pack = "0.1.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha2 = "0.10.9"
 thiserror = "2.0.18"
+littlefs2-pack = { path = "../littlefs2-pack" }
