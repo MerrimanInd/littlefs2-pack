@@ -1,131 +1,168 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use ignore::WalkBuilder;
-use littlefs2_pack::{LfsImage, LfsImageConfig};
+use ignore::{WalkBuilder, overrides::OverrideBuilder};
+use littlefs2_config::DirectoryConfig;
+use littlefs2_pack::MountedFs;
+use thiserror::Error;
 
-#[derive(Debug, thiserror::Error)]
-pub enum ImageError {
-    #[error("Error packing the image: {0}")]
+#[derive(Debug, Error)]
+pub enum PackError {
+    #[error("LittleFS error: {0}")]
     Lfs(#[from] littlefs2_pack::LfsError),
-    #[error("Error walking the directory: {0}")]
-    Ignore(#[from] ignore::Error),
-    #[error("Error reading a file: {0}")]
+
+    #[error("directory walk error: {0}")]
+    Walk(#[from] ignore::Error),
+
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("path is not valid UTF-8: {}", .0.display())]
+    InvalidPath(PathBuf),
 }
 
-/// This enum sets the behavior when littlefs2-send
-/// encounters a file that cannot be read or packed
-pub enum OnError {
-    Fail,
-    Ignore,
-    Log(PathBuf),
+/// Build a `WalkBuilder` from a `DirectoryConfig`.
+///
+/// Applie the depth, hidden-file, gitignore, and glob settings
+/// from the TOML configuration.
+pub fn walker(config: &DirectoryConfig, root: &Path) -> WalkBuilder {
+    let mut builder = WalkBuilder::new(root);
+    builder.hidden(config.ignore_hidden());
+
+    let depth = config.depth();
+    if depth >= 0 {
+        builder.max_depth(Some(depth as usize));
+    }
+
+    builder
+        .git_ignore(config.gitignore())
+        .git_global(config.repo_gitignore());
+
+    let mut overrides = OverrideBuilder::new(root);
+
+    // Negate patterns to ignore them
+    for pattern in config.glob_ignores() {
+        overrides
+            .add(&format!("!{pattern}"))
+            .expect("glob patterns are validated when DirectoryConfig is created");
+    }
+
+    // Include patterns override ignores — added after so they win
+    for pattern in config.glob_includes() {
+        overrides
+            .add(pattern)
+            .expect("glob patterns are validated when DirectoryConfig is created");
+    }
+
+    builder.overrides(
+        overrides
+            .build()
+            .expect("glob patterns are validated when DirectoryConfig is created"),
+    );
+
+    builder
 }
 
-/// This struct represents a local directory that will be
-/// packed and sent to the microcontroller on flashing.
-struct ImageDirectory {
-    builder: WalkBuilder,
-    on_error: OnError,
-    image: LfsImage,
-    path: PathBuf,
+/// Convert a host path to a LittleFS path by stripping the root prefix.
+///
+/// `./website/css/style.css` with root `./website` becomes `/css/style.css`.
+fn to_lfs_path(host_path: &Path, root: &Path) -> Result<String, PackError> {
+    let relative = host_path
+        .strip_prefix(root)
+        .map_err(|_| PackError::InvalidPath(host_path.to_owned()))?;
+
+    let s = relative
+        .to_str()
+        .ok_or_else(|| PackError::InvalidPath(host_path.to_owned()))?;
+
+    Ok(format!("/{s}"))
 }
 
-impl ImageDirectory {
-    /// Create a new image target directory that ignores
-    /// hidden files and folders while respecting .gitignore
-    fn new(config: LfsImageConfig, directory_root: PathBuf) -> Result<Self, ImageError> {
-        Ok(Self {
-            builder: WalkBuilder::new(directory_root.clone()),
-            image: LfsImage::new(config)?,
-            path: directory_root,
-            on_error: OnError::Ignore,
-        })
-    }
+/// Walk a directory and pack its contents into a mounted LittleFS filesystem.
+///
+/// The caller is responsible for creating, formatting, and mounting
+/// the image. This function just writes the directory contents into it.
+pub fn pack_directory(
+    fs: &MountedFs<'_>,
+    config: &DirectoryConfig,
+    root: &Path,
+) -> Result<(), PackError> {
+    let walk = walker(config, root);
 
-    /// Create a new image target directory from an
-    /// `ignore::WalkBuilder` struct.
-    fn from_builder(
-        config: LfsImageConfig,
-        directory_root: PathBuf,
-        builder: WalkBuilder,
-    ) -> Result<Self, ImageError> {
-        Ok(Self {
-            builder: builder,
-            image: LfsImage::new(config)?,
-            path: directory_root,
-            on_error: OnError::Ignore,
-        })
-    }
+    let mut dirs: Vec<String> = Vec::new();
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
 
-    /// Builder pattern method for setting the
-    /// ignore_file_errors option
-    fn ignore_file_errors(mut self) -> Self {
-        self.on_error = OnError::Fail;
-        return self;
-    }
+    for entry in walk.build() {
+        let entry = entry?;
 
-    /// Consume the ImageDirectory object and return
-    /// its inner LfsImage for flashing to the micro.
-    fn image(self) -> LfsImage {
-        self.image
-    }
-
-    /// Walk the directory and pack the discovered contents into
-    /// the LittleFS file image
-    fn pack(&mut self) -> Result<(), ImageError> {
-        let handle_err = |e: ImageError| -> Result<(), ImageError> {
-            match &self.on_error {
-                OnError::Fail => Err(e),
-                OnError::Ignore => Ok(()),
-                OnError::Log(path) => {
-                    use std::io::Write;
-                    let mut file = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(path)?;
-                    writeln!(file, "{e}")?;
-                    Ok(())
-                }
-            }
-        };
-
-        let mut dirs: Vec<PathBuf> = Vec::new();
-        let mut files: Vec<(PathBuf, Vec<u8>)> = Vec::new();
-
-        for entry in self.builder.build() {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    handle_err(e.into())?;
-                    continue;
-                }
-            };
-
-            if entry.depth() == 0 {
-                continue;
-            }
-
-            let ft = entry.file_type().unwrap();
-            if ft.is_dir() {
-                dirs.push(entry.path().to_owned());
-            } else if ft.is_file() {
-                match std::fs::read(entry.path()) {
-                    Ok(data) => files.push((entry.path().to_owned(), data)),
-                    Err(e) => handle_err(e.into())?,
-                }
-            }
+        // Skip the root directory itself
+        if entry.depth() == 0 {
+            continue;
         }
 
-        self.image.mount_and_then(|fs| {
-            for path in &dirs {
-                fs.create_dir(path.to_str().unwrap())?;
-            }
-            for (path, data) in &files {
-                fs.write_file(path.to_str().unwrap(), data)?;
-            }
-            Ok(())
-        })?;
+        let ft = entry
+            .file_type()
+            .ok_or_else(|| PackError::InvalidPath(entry.path().to_owned()))?;
 
-        Ok(())
+        let lfs_path = to_lfs_path(entry.path(), root)?;
+
+        if ft.is_dir() {
+            dirs.push(lfs_path);
+        } else if ft.is_file() {
+            let data = std::fs::read(entry.path())?;
+            files.push((lfs_path, data));
+        }
     }
+
+    // Sort for deterministic output
+    dirs.sort();
+    files.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    for path in &dirs {
+        fs.create_dir_all(path)?;
+    }
+    for (path, data) in &files {
+        fs.write_file(path, data)?;
+    }
+
+    Ok(())
+}
+
+/// Simple recursive directory packing without ignore/glob rules.
+/// Used when no TOML config is provided.
+pub fn pack_directory_simple(
+    fs: &MountedFs<'_>,
+    host_dir: &Path,
+    lfs_prefix: &str,
+) -> Result<(), PackError> {
+    let mut entries: Vec<_> = std::fs::read_dir(host_dir)
+        .map_err(|e| PackError::Io(e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| PackError::Io(e))?;
+
+    // Sort for deterministic output
+    entries.sort_by_key(|e| e.file_name());
+
+    for entry in entries {
+        let file_type = entry.file_type().map_err(|e| PackError::Io(e))?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        let lfs_path = if lfs_prefix.is_empty() {
+            format!("/{name_str}")
+        } else {
+            format!("{lfs_prefix}/{name_str}")
+        };
+
+        if file_type.is_dir() {
+            println!("  mkdir  {lfs_path}");
+            fs.create_dir(&lfs_path)?;
+            pack_directory_simple(fs, &entry.path(), &lfs_path)?;
+        } else if file_type.is_file() {
+            let data = std::fs::read(entry.path()).map_err(|e| PackError::Io(e))?;
+            println!("  write  {lfs_path} ({} bytes)", data.len());
+            fs.write_file(&lfs_path, &data)?;
+        }
+    }
+
+    Ok(())
 }
