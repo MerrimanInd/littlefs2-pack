@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use littlefs2_config::{Config, ImageConfig};
 use littlefs2_pack::{LfsError, LfsImage, MountedFs};
-use littlefs2_tool::pack_directory;
+use littlefs2_tool::pack::pack_directory;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -468,4 +468,370 @@ fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
     })?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use littlefs2_config::ImageConfig;
+    use std::fs;
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /// Create an ImageConfigParams with all fields None.
+    fn empty_cli() -> ImageConfigParams {
+        ImageConfigParams {
+            block_size: None,
+            block_count: None,
+            image_size: None,
+            page_size: None,
+            read_size: None,
+            write_size: None,
+            block_cycles: None,
+        }
+    }
+
+    /// Write a minimal littlefs.toml and create the directory root it references.
+    fn write_test_toml(dir: &Path, image_overrides: &str) -> PathBuf {
+        let site_dir = dir.join("site");
+        fs::create_dir_all(&site_dir).unwrap();
+
+        let toml_path = dir.join("littlefs.toml");
+        fs::write(
+            &toml_path,
+            format!(
+                r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+read_size = 16
+write_size = 512
+{image_overrides}
+
+[directory]
+root = "./site"
+depth = -1
+ignore_hidden = true
+gitignore = false
+repo_gitignore = false
+glob_ignores = []
+glob_includes = []
+"#
+            ),
+        )
+        .unwrap();
+
+        toml_path
+    }
+
+    // -------------------------------------------------------------------------
+    // image_config_from_cli: valid constructions
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn cli_with_block_count_and_page_size() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            block_count: Some(64),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+        let config = image_config_from_cli(&cli).unwrap();
+        assert_eq!(config.block_size(), 4096);
+        assert_eq!(config.block_count(), 64);
+        assert_eq!(config.read_size(), 256);
+        assert_eq!(config.write_size(), 256);
+        assert_eq!(config.block_cycles(), -1);
+    }
+
+    #[test]
+    fn cli_with_image_size() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            image_size: Some(4096 * 64),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+        let config = image_config_from_cli(&cli).unwrap();
+        assert_eq!(config.block_count(), 64);
+        assert_eq!(config.image_size(), 4096 * 64);
+    }
+
+    #[test]
+    fn cli_with_explicit_read_write_sizes() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            block_count: Some(64),
+            read_size: Some(16),
+            write_size: Some(512),
+            ..empty_cli()
+        };
+        let config = image_config_from_cli(&cli).unwrap();
+        assert_eq!(config.read_size(), 16);
+        assert_eq!(config.write_size(), 512);
+    }
+
+    #[test]
+    fn cli_read_write_override_page_size() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            block_count: Some(64),
+            page_size: Some(256),
+            read_size: Some(16),
+            write_size: Some(512),
+            ..empty_cli()
+        };
+        let config = image_config_from_cli(&cli).unwrap();
+        assert_eq!(config.read_size(), 16);
+        assert_eq!(config.write_size(), 512);
+    }
+
+    #[test]
+    fn cli_explicit_block_cycles() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            block_count: Some(64),
+            page_size: Some(256),
+            block_cycles: Some(500),
+            ..empty_cli()
+        };
+        let config = image_config_from_cli(&cli).unwrap();
+        assert_eq!(config.block_cycles(), 500);
+    }
+
+    #[test]
+    fn cli_block_cycles_defaults_to_negative_one() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            block_count: Some(64),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+        let config = image_config_from_cli(&cli).unwrap();
+        assert_eq!(config.block_cycles(), -1);
+    }
+
+    // -------------------------------------------------------------------------
+    // image_config_from_cli: error cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn cli_missing_block_size_fails() {
+        let cli = ImageConfigParams {
+            block_count: Some(64),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+        assert!(image_config_from_cli(&cli).is_err());
+    }
+
+    #[test]
+    fn cli_missing_page_and_read_write_fails() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            block_count: Some(64),
+            ..empty_cli()
+        };
+        assert!(image_config_from_cli(&cli).is_err());
+    }
+
+    #[test]
+    fn cli_missing_block_count_and_image_size_fails() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+        assert!(image_config_from_cli(&cli).is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // apply_cli_overrides
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn overrides_no_cli_args_preserves_toml() {
+        let base = ImageConfig::from(4096, 128, 16, 512);
+        let cli = empty_cli();
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_size(), 4096);
+        assert_eq!(config.block_count(), 128);
+        assert_eq!(config.read_size(), 16);
+        assert_eq!(config.write_size(), 512);
+    }
+
+    #[test]
+    fn overrides_block_size() {
+        let base = ImageConfig::from(4096, 128, 256, 256);
+        let cli = ImageConfigParams {
+            block_size: Some(512),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_size(), 512);
+        assert_eq!(config.block_count(), 128); // preserved from TOML
+    }
+
+    #[test]
+    fn overrides_block_count() {
+        let base = ImageConfig::from(4096, 128, 256, 256);
+        let cli = ImageConfigParams {
+            block_count: Some(64),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_count(), 64);
+    }
+
+    #[test]
+    fn overrides_image_size_replaces_block_count() {
+        let base = ImageConfig::from(4096, 128, 256, 256);
+        let cli = ImageConfigParams {
+            image_size: Some(4096 * 32),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_count(), 32);
+        assert_eq!(config.image_size(), 4096 * 32);
+    }
+
+    #[test]
+    fn overrides_read_write_sizes() {
+        let base = ImageConfig::from(4096, 128, 256, 256);
+        let cli = ImageConfigParams {
+            read_size: Some(16),
+            write_size: Some(512),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.read_size(), 16);
+        assert_eq!(config.write_size(), 512);
+    }
+
+    #[test]
+    fn overrides_block_cycles() {
+        let base = ImageConfig::from(4096, 128, 256, 256);
+        let cli = ImageConfigParams {
+            block_cycles: Some(100),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_cycles(), 100);
+    }
+
+    // -------------------------------------------------------------------------
+    // image_config_for_reading: with TOML
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn reading_config_from_toml_and_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let toml_path = write_test_toml(dir.path(), "");
+        let config_path = Some(toml_path);
+
+        // Simulate a 64-block image file
+        let data = vec![0xFF; 4096 * 64];
+        let config = image_config_for_reading(&config_path, &empty_cli(), &data).unwrap();
+
+        // block_count comes from file size, not TOML
+        assert_eq!(config.block_count(), 64);
+        // Other params come from TOML
+        assert_eq!(config.block_size(), 4096);
+        assert_eq!(config.read_size(), 16);
+        assert_eq!(config.write_size(), 512);
+    }
+
+    #[test]
+    fn reading_config_cli_overrides_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let toml_path = write_test_toml(dir.path(), "");
+        let config_path = Some(toml_path);
+
+        let cli = ImageConfigParams {
+            read_size: Some(32),
+            ..empty_cli()
+        };
+
+        let data = vec![0xFF; 4096 * 64];
+        let config = image_config_for_reading(&config_path, &cli, &data).unwrap();
+
+        assert_eq!(config.read_size(), 32);
+        assert_eq!(config.write_size(), 512); // from TOML
+    }
+
+    // -------------------------------------------------------------------------
+    // image_config_for_reading: CLI only
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn reading_config_cli_only() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+
+        let data = vec![0xFF; 4096 * 32];
+        let config = image_config_for_reading(&None, &cli, &data).unwrap();
+
+        assert_eq!(config.block_size(), 4096);
+        assert_eq!(config.block_count(), 32);
+        assert_eq!(config.read_size(), 256);
+        assert_eq!(config.write_size(), 256);
+    }
+
+    #[test]
+    fn reading_config_misaligned_file_fails() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+
+        let data = vec![0xFF; 5000]; // not a multiple of 4096
+        assert!(image_config_for_reading(&None, &cli, &data).is_err());
+    }
+
+    #[test]
+    fn reading_config_empty_file_fails() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            page_size: Some(256),
+            ..empty_cli()
+        };
+
+        let data = vec![];
+        assert!(image_config_for_reading(&None, &cli, &data).is_err());
+    }
+
+    #[test]
+    fn reading_config_cli_missing_block_size_fails() {
+        let cli = ImageConfigParams {
+            page_size: Some(256),
+            ..empty_cli()
+        };
+
+        let data = vec![0xFF; 4096 * 32];
+        assert!(image_config_for_reading(&None, &cli, &data).is_err());
+    }
+
+    #[test]
+    fn reading_config_cli_missing_sizes_fails() {
+        let cli = ImageConfigParams {
+            block_size: Some(4096),
+            ..empty_cli()
+        };
+
+        let data = vec![0xFF; 4096 * 32];
+        assert!(image_config_for_reading(&None, &cli, &data).is_err());
+    }
 }

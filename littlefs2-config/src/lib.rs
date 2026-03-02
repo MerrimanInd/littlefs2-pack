@@ -27,6 +27,7 @@
 //! glob_includes = []
 //! ```
 
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -384,6 +385,25 @@ impl DirectoryConfig {
     /// Glob patterns for files to force-include, superseding all ignore rules.
     pub fn glob_includes(&self) -> &[String] {
         &self.glob_includes
+    }
+
+    /// Export the include set. This is a `globset` object
+    /// used for the directory walk to make sure these
+    /// included files are present.
+    pub fn include_set(&self) -> Option<GlobSet> {
+        if self.glob_includes.is_empty() {
+            return None;
+        }
+
+        let mut builder = GlobSetBuilder::new();
+        for pattern in &self.glob_includes {
+            builder.add(Glob::new(pattern).expect("validated in DirectoryConfig::validate"));
+        }
+        Some(
+            builder
+                .build()
+                .expect("validated in DirectoryConfig::validate"),
+        )
     }
 
     /// Resolve the root path against a base directory and verify it exists.

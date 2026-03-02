@@ -31,3 +31,4 @@ littlefs2-config = { version = "0.1.0", path = "../littlefs2-config" }
 
 [dev-dependencies]
 tempfile = "3"
+toml = "1.0.3"
