@@ -1,3 +1,4 @@
+use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use littlefs2_config::{Config, ImageConfig};
 use littlefs2_pack::{LfsError, LfsImage, MountedFs};
@@ -75,12 +76,11 @@ pub struct ImageConfigParams {
 // ---------------------------------------------------------------------------
 
 /// Build an `ImageConfig` entirely from CLI arguments using the builder pattern.
-fn image_config_from_cli(
-    cli: &ImageConfigParams,
-) -> Result<ImageConfig, Box<dyn std::error::Error>> {
-    let block_size = cli
-        .block_size
-        .ok_or("--block-size is required without --config")?;
+fn image_config_from_cli(cli: &ImageConfigParams) -> Result<ImageConfig> {
+    let block_size = match cli.block_size {
+        Some(bs) => bs,
+        None => bail!("--block-size is required without --config"),
+    };
 
     let mut builder = ImageConfig::new()
         .with_block_size(block_size)
@@ -136,7 +136,7 @@ fn image_config_for_reading(
     config_path: &Option<PathBuf>,
     cli: &ImageConfigParams,
     data: &[u8],
-) -> Result<ImageConfig, Box<dyn std::error::Error>> {
+) -> Result<ImageConfig> {
     // Get block_size and read/write sizes from TOML or CLI
     let (block_size, read_size, write_size, block_cycles) = match config_path {
         Some(path) => {
@@ -149,17 +149,18 @@ fn image_config_for_reading(
             )
         }
         None => {
-            let block_size = cli
-                .block_size
-                .ok_or("--block-size is required without --config")?;
-            let read_size = cli
-                .read_size
-                .or(cli.page_size)
-                .ok_or("--page-size or --read-size required without --config")?;
-            let write_size = cli
-                .write_size
-                .or(cli.page_size)
-                .ok_or("--page-size or --write-size required without --config")?;
+            let block_size = match cli.block_size {
+                Some(bs) => bs,
+                None => bail!("--block-size is required without --config"),
+            };
+            let read_size = match cli.read_size.or(cli.page_size) {
+                Some(rs) => rs,
+                None => bail!("--page-size or --read-size required without --config"),
+            };
+            let write_size = match cli.write_size.or(cli.page_size) {
+                Some(ws) => ws,
+                None => bail!("--page-size or --write-size required without --config"),
+            };
             (
                 block_size,
                 read_size,
@@ -170,11 +171,10 @@ fn image_config_for_reading(
     };
 
     if data.is_empty() || data.len() % block_size != 0 {
-        return Err(format!(
+        bail!(
             "image file size ({}) is not a multiple of block_size ({block_size})",
             data.len()
-        )
-        .into());
+        );
     }
 
     Ok(ImageConfig::new()
@@ -242,7 +242,7 @@ pub struct InfoCmd {
 // Entry point
 // ---------------------------------------------------------------------------
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -259,7 +259,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // pack
 // ---------------------------------------------------------------------------
 
-fn cmd_pack(config_path: &Option<PathBuf>, args: Pack) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_pack(config_path: &Option<PathBuf>, args: Pack) -> Result<()> {
     // Resolve everything from TOML + CLI overrides
     let (image_config, root, directory_config) = match config_path {
         Some(path) => {
@@ -272,9 +272,10 @@ fn cmd_pack(config_path: &Option<PathBuf>, args: Pack) -> Result<(), Box<dyn std
         }
         None => {
             let image_config = image_config_from_cli(&args.fs)?;
-            let root = args
-                .pack_directory
-                .ok_or("--pack-directory is required without --config")?;
+            let root = match args.pack_directory {
+                Some(d) => d,
+                None => bail!("--pack-directory is required without --config"),
+            };
             (image_config, root, None)
         }
     };
@@ -293,7 +294,8 @@ fn cmd_pack(config_path: &Option<PathBuf>, args: Pack) -> Result<(), Box<dyn std
     })?;
 
     let data = image.into_data();
-    std::fs::write(&args.output, &data)?;
+    std::fs::write(&args.output, &data)
+        .with_context(|| format!("failed to write image to '{}'", args.output.display()))?;
 
     println!(
         "Packed '{}' -> '{}' ({} bytes, {} blocks x {} bytes)",
@@ -351,15 +353,14 @@ fn pack_directory_simple(
 // unpack
 // ---------------------------------------------------------------------------
 
-fn cmd_unpack(
-    config_path: &Option<PathBuf>,
-    args: Unpack,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let data = std::fs::read(&args.image)?;
+fn cmd_unpack(config_path: &Option<PathBuf>, args: Unpack) -> Result<()> {
+    let data = std::fs::read(&args.image)
+        .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
     let config = image_config_for_reading(config_path, &args.fs, &data)?;
     let mut image = LfsImage::from_data(config, data)?;
 
-    std::fs::create_dir_all(&args.unpack_directory)?;
+    std::fs::create_dir_all(&args.unpack_directory)
+        .with_context(|| format!("failed to create '{}'", args.unpack_directory.display()))?;
 
     image.mount_and_then(|fs| unpack_directory(fs, "/", &args.unpack_directory))?;
 
@@ -400,11 +401,9 @@ fn unpack_directory(fs: &MountedFs<'_>, lfs_dir: &str, host_dir: &Path) -> Resul
 // list
 // ---------------------------------------------------------------------------
 
-fn cmd_list(
-    config_path: &Option<PathBuf>,
-    args: ListCmd,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let data = std::fs::read(&args.image)?;
+fn cmd_list(config_path: &Option<PathBuf>, args: ListCmd) -> Result<()> {
+    let data = std::fs::read(&args.image)
+        .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
     let config = image_config_for_reading(config_path, &args.fs, &data)?;
     let mut image = LfsImage::from_data(config, data)?;
 
@@ -446,11 +445,9 @@ fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, prefix: &str) -> Result<(),
 // info
 // ---------------------------------------------------------------------------
 
-fn cmd_info(
-    config_path: &Option<PathBuf>,
-    args: InfoCmd,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let data = std::fs::read(&args.image)?;
+fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
+    let data = std::fs::read(&args.image)
+        .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
     let config = image_config_for_reading(config_path, &args.fs, &data)?;
 
     let bc = config.block_count();
