@@ -80,6 +80,22 @@ pub enum ConfigError {
     #[error("root directory not found at: {0}")]
     RootNotFound(PathBuf),
 
+    /// A glob pattern in `glob_ignores` or `glob_includes` is invalid.
+    #[error("invalid glob pattern \"{pattern}\": {source}")]
+    InvalidGlob {
+        pattern: String,
+        #[source]
+        source: globset::Error,
+    },
+
+    /// The `depth` value is invalid (must be >= -1).
+    #[error("invalid depth: {0} (must be >= -1)")]
+    InvalidDepth(i32),
+
+    /// `repo_gitignore` is `true` but `gitignore` is `false`.
+    #[error("repo_gitignore requires gitignore to be enabled")]
+    RepoGitignoreWithoutGitignore,
+
     /// Failed to write generated Rust constants.
     #[error("failed to write generated config to {path}")]
     EmitRust {
@@ -93,7 +109,7 @@ pub enum ConfigError {
 ///
 /// Contains both the image parameters and directory settings, along with
 /// the base directory (parent of the TOML file) used to resolve relative paths.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub image: ImageConfig,
@@ -125,6 +141,7 @@ impl Config {
         config.base_dir = path.parent().unwrap_or(Path::new(".")).to_owned();
 
         config.image.validate()?;
+        config.directory.validate()?;
         config.directory.resolve_root(&config.base_dir)?;
 
         Ok(config)
@@ -142,7 +159,7 @@ impl Config {
 /// mutually exclusive ways to specify the total size: `block_count` or
 /// `image_size`. The `page_size` field acts as a default for `read_size`
 /// and `write_size` when they are not explicitly set.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageConfig {
     block_size: usize,
@@ -161,19 +178,6 @@ impl ImageConfig {
 
     // Block-cycle count for wear leveling. -1 disables wear leveling.
     accessor!(block_cycles -> i32);
-
-    // Create a new ImageConfig object, mainly for testing purposes
-    pub fn new(block_size: usize, block_count: usize, read_size: usize, write_size: usize) -> Self {
-        Self {
-            block_size,
-            block_count: Some(block_count),
-            image_size: None,
-            page_size: None,
-            read_size: Some(read_size),
-            write_size: Some(write_size),
-            block_cycles: -1,
-        }
-    }
 
     /// Validate that the image configuration is internally consistent.
     fn validate(&self) -> Result<(), ConfigError> {
@@ -251,7 +255,7 @@ impl ImageConfig {
 ///
 /// Controls which local directory to pack, how deep to recurse, and
 /// which files to include or exclude via gitignore rules and glob patterns.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DirectoryConfig {
     root: String,
@@ -264,17 +268,17 @@ pub struct DirectoryConfig {
 }
 
 impl DirectoryConfig {
-    /// Maximum recursive directory depth. -1 means unlimited.
+    // Maximum recursive directory depth. -1 means unlimited.
     accessor!(depth -> i32);
 
-    /// Whether to skip hidden files and directories.
+    // Whether to skip hidden files and directories.
     accessor!(ignore_hidden -> bool);
 
-    /// Whether to respect `.gitignore` files in the directory tree.
+    // Whether to respect `.gitignore` files in the directory tree.
     accessor!(gitignore -> bool);
 
-    /// Whether to also respect the repository-level `.gitignore`.
-    /// Only meaningful when `gitignore` is `true`.
+    // Whether to also respect the repository-level `.gitignore`.
+    // Only meaningful when `gitignore` is `true`.
     accessor!(repo_gitignore -> bool);
 
     /// The configured root directory path (as written in the TOML).
@@ -300,6 +304,36 @@ impl DirectoryConfig {
         }
         Ok(root)
     }
+
+    /// Validate that the directory configuration is internally consistent.
+    ///
+    /// Checks that depth is valid, gitignore settings are coherent,
+    /// and all glob patterns parse successfully.
+    fn validate(&self) -> Result<(), ConfigError> {
+        if self.depth < -1 {
+            return Err(ConfigError::InvalidDepth(self.depth));
+        }
+
+        if self.repo_gitignore && !self.gitignore {
+            return Err(ConfigError::RepoGitignoreWithoutGitignore);
+        }
+
+        for pattern in &self.glob_ignores {
+            globset::Glob::new(pattern).map_err(|source| ConfigError::InvalidGlob {
+                pattern: pattern.clone(),
+                source,
+            })?;
+        }
+
+        for pattern in &self.glob_includes {
+            globset::Glob::new(pattern).map_err(|source| ConfigError::InvalidGlob {
+                pattern: pattern.clone(),
+                source,
+            })?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -312,11 +346,12 @@ mod tests {
     // -------------------------------------------------------------------------
 
     /// Parse a TOML string directly into a Config, skipping file I/O and
-    /// directory resolution. Runs image validation only.
-    fn parse_and_validate_image(toml: &str) -> Result<Config, ConfigError> {
+    /// directory resolution. Runs image and directory validation.
+    fn parse_and_validate(toml: &str) -> Result<Config, ConfigError> {
         let mut config: Config = toml::from_str(toml).map_err(ConfigError::Parse)?;
         config.base_dir = PathBuf::from(".");
         config.image.validate()?;
+        config.directory.validate()?;
         Ok(config)
     }
 
@@ -346,7 +381,7 @@ glob_includes = []
     #[test]
     fn block_count_directly() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.block_count(), 128);
         assert_eq!(config.image.image_size(), 128 * 4096);
     }
@@ -354,7 +389,7 @@ glob_includes = []
     #[test]
     fn image_size_calculates_block_count() {
         let toml = minimal_image_toml("image_size = 524288\npage_size = 256");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.block_count(), 128);
         assert_eq!(config.image.image_size(), 524288);
     }
@@ -362,21 +397,21 @@ glob_includes = []
     #[test]
     fn both_sizing_methods_rejected() {
         let toml = minimal_image_toml("block_count = 128\nimage_size = 524288\npage_size = 256");
-        let err = parse_and_validate_image(&toml).unwrap_err();
+        let err = parse_and_validate(&toml).unwrap_err();
         assert!(matches!(err, ConfigError::BothSizingMethods));
     }
 
     #[test]
     fn no_sizing_method_rejected() {
         let toml = minimal_image_toml("page_size = 256");
-        let err = parse_and_validate_image(&toml).unwrap_err();
+        let err = parse_and_validate(&toml).unwrap_err();
         assert!(matches!(err, ConfigError::NoSizingMethod));
     }
 
     #[test]
     fn image_size_not_multiple_of_block_size() {
         let toml = minimal_image_toml("image_size = 5000\npage_size = 256");
-        let err = parse_and_validate_image(&toml).unwrap_err();
+        let err = parse_and_validate(&toml).unwrap_err();
         assert!(matches!(err, ConfigError::ImageSizeAlignment { .. }));
     }
 
@@ -387,7 +422,7 @@ glob_includes = []
     #[test]
     fn page_size_sets_both_read_and_write() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.read_size(), 256);
         assert_eq!(config.image.write_size(), 256);
     }
@@ -397,7 +432,7 @@ glob_includes = []
         let toml = minimal_image_toml(
             "block_count = 128\npage_size = 256\nread_size = 16\nwrite_size = 512",
         );
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.read_size(), 16);
         assert_eq!(config.image.write_size(), 512);
     }
@@ -405,7 +440,7 @@ glob_includes = []
     #[test]
     fn partial_override_with_page_size_fallback() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256\nread_size = 16");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.read_size(), 16);
         assert_eq!(config.image.write_size(), 256);
     }
@@ -413,7 +448,7 @@ glob_includes = []
     #[test]
     fn explicit_read_write_without_page_size() {
         let toml = minimal_image_toml("block_count = 128\nread_size = 16\nwrite_size = 512");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.read_size(), 16);
         assert_eq!(config.image.write_size(), 512);
     }
@@ -421,14 +456,14 @@ glob_includes = []
     #[test]
     fn missing_read_size_without_page_size() {
         let toml = minimal_image_toml("block_count = 128\nwrite_size = 512");
-        let err = parse_and_validate_image(&toml).unwrap_err();
+        let err = parse_and_validate(&toml).unwrap_err();
         assert!(matches!(err, ConfigError::MissingSize("read_size")));
     }
 
     #[test]
     fn missing_write_size_without_page_size() {
         let toml = minimal_image_toml("block_count = 128\nread_size = 16");
-        let err = parse_and_validate_image(&toml).unwrap_err();
+        let err = parse_and_validate(&toml).unwrap_err();
         assert!(matches!(err, ConfigError::MissingSize("write_size")));
     }
 
@@ -439,14 +474,14 @@ glob_includes = []
     #[test]
     fn block_cycles_defaults_to_negative_one() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.block_cycles(), -1);
     }
 
     #[test]
     fn block_cycles_explicit() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256\nblock_cycles = 500");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.block_cycles(), 500);
     }
 
@@ -457,7 +492,7 @@ glob_includes = []
     #[test]
     fn block_size_accessor() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         assert_eq!(config.image.block_size(), 4096);
     }
 
@@ -468,7 +503,7 @@ glob_includes = []
     #[test]
     fn directory_accessors() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
         let dir = &config.directory;
 
         assert_eq!(dir.root(), ".");
@@ -497,7 +532,7 @@ repo_gitignore = true
 glob_ignores = ["*.bkup", "build"]
 glob_includes = ["important.txt"]
 "#;
-        let config = parse_and_validate_image(toml).unwrap();
+        let config = parse_and_validate(toml).unwrap();
         let dir = &config.directory;
 
         assert_eq!(dir.depth(), 3);
@@ -506,6 +541,114 @@ glob_includes = ["important.txt"]
         assert!(dir.repo_gitignore());
         assert_eq!(dir.glob_ignores(), &["*.bkup", "build"]);
         assert_eq!(dir.glob_includes(), &["important.txt"]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Directory config: validation
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn invalid_depth_rejected() {
+        let toml = r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+
+[directory]
+root = "."
+depth = -2
+ignore_hidden = true
+gitignore = false
+repo_gitignore = false
+glob_ignores = []
+glob_includes = []
+"#;
+        let err = parse_and_validate(toml).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidDepth(-2)));
+    }
+
+    #[test]
+    fn repo_gitignore_without_gitignore_rejected() {
+        let toml = r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+
+[directory]
+root = "."
+depth = -1
+ignore_hidden = true
+gitignore = false
+repo_gitignore = true
+glob_ignores = []
+glob_includes = []
+"#;
+        let err = parse_and_validate(toml).unwrap_err();
+        assert!(matches!(err, ConfigError::RepoGitignoreWithoutGitignore));
+    }
+
+    #[test]
+    fn invalid_glob_ignore_rejected() {
+        let toml = r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+
+[directory]
+root = "."
+depth = -1
+ignore_hidden = true
+gitignore = false
+repo_gitignore = false
+glob_ignores = ["[invalid"]
+glob_includes = []
+"#;
+        let err = parse_and_validate(toml).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidGlob { .. }));
+    }
+
+    #[test]
+    fn invalid_glob_include_rejected() {
+        let toml = r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+
+[directory]
+root = "."
+depth = -1
+ignore_hidden = true
+gitignore = false
+repo_gitignore = false
+glob_ignores = []
+glob_includes = ["[also-invalid"]
+"#;
+        let err = parse_and_validate(toml).unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidGlob { .. }));
+    }
+
+    #[test]
+    fn valid_globs_accepted() {
+        let toml = r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+
+[directory]
+root = "."
+depth = -1
+ignore_hidden = true
+gitignore = false
+repo_gitignore = false
+glob_ignores = ["*.bkup", "build", "**/*.tmp"]
+glob_includes = ["important.txt", "data/**"]
+"#;
+        assert!(parse_and_validate(toml).is_ok());
     }
 
     // -------------------------------------------------------------------------
@@ -632,7 +775,7 @@ glob_includes = []
         let toml = minimal_image_toml(
             "block_count = 64\npage_size = 256\nread_size = 16\nwrite_size = 512",
         );
-        let config = parse_and_validate_image(&toml).unwrap();
+        let config = parse_and_validate(&toml).unwrap();
 
         let dir = tempfile::tempdir().unwrap();
         config.image.emit_rust(dir.path()).unwrap();
@@ -651,7 +794,7 @@ glob_includes = []
     #[test]
     fn unknown_image_field_rejected() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256\nbogus = 42");
-        let err = parse_and_validate_image(&toml).unwrap_err();
+        let err = parse_and_validate(&toml).unwrap_err();
         assert!(matches!(err, ConfigError::Parse(_)));
     }
 
@@ -673,7 +816,7 @@ glob_ignores = []
 glob_includes = []
 surprise = true
 "#;
-        let err = parse_and_validate_image(toml).unwrap_err();
+        let err = parse_and_validate(toml).unwrap_err();
         assert!(matches!(err, ConfigError::Parse(_)));
     }
 }
