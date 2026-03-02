@@ -109,7 +109,7 @@ pub enum ConfigError {
 ///
 /// Contains both the image parameters and directory settings, along with
 /// the base directory (parent of the TOML file) used to resolve relative paths.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub image: ImageConfig,
@@ -159,7 +159,7 @@ impl Config {
 /// mutually exclusive ways to specify the total size: `block_count` or
 /// `image_size`. The `page_size` field acts as a default for `read_size`
 /// and `write_size` when they are not explicitly set.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImageConfig {
     block_size: usize,
@@ -178,6 +178,96 @@ impl ImageConfig {
 
     // Block-cycle count for wear leveling. -1 disables wear leveling.
     accessor!(block_cycles -> i32);
+
+    // Create a new ImageConfig object from a set of parameters, mainly for testing purposes
+    pub fn from(
+        block_size: usize,
+        block_count: usize,
+        read_size: usize,
+        write_size: usize,
+    ) -> Self {
+        Self {
+            block_size,
+            block_count: Some(block_count),
+            image_size: None,
+            page_size: None,
+            read_size: Some(read_size),
+            write_size: Some(write_size),
+            block_cycles: -1,
+        }
+    }
+
+    /// Create a new unconfigured ImageConfig to use with builder methods
+    ///
+    /// Warning! This constructor and the builder functions will leave
+    /// the ImageConfig in an invalid state during construction. There will
+    /// not be enough settings to properly define the config until they're
+    /// all set and if they're set incorrectly then the config may be over-
+    /// constrained.
+    ///
+    /// After configuration is complete validate it by running either `validate()`
+    /// or use `validated()` which returns `Result<ImageConfig, ConfigError>`,
+    /// more ergonomic for use in builder function chaining.
+    pub fn new() -> Self {
+        Self {
+            block_size: 16,
+            block_count: None,
+            image_size: None,
+            page_size: None,
+            read_size: None,
+            write_size: None,
+            block_cycles: -1,
+        }
+    }
+
+    /// Validate the configuraton and return `Result<Self, ConfigError>`,
+    /// for use in builder pattern construction.
+    pub fn validated(self) -> Result<Self, ConfigError> {
+        self.validate()?;
+        Ok(self)
+    }
+
+    /// Builder function for setting block size
+    pub fn with_block_size(mut self, block_size: usize) -> Self {
+        self.block_size = block_size;
+        self
+    }
+
+    /// Builder function for setting block count
+    pub fn with_block_count(mut self, block_count: usize) -> Self {
+        self.block_count = Some(block_count);
+        self
+    }
+
+    /// Builder function for setting image size
+    pub fn with_image_size(mut self, image_size: usize) -> Self {
+        self.image_size = Some(image_size);
+        self
+    }
+
+    /// Builder function for setting page size
+    pub fn with_page_size(mut self, page_size: usize) -> Self {
+        self.page_size = Some(page_size);
+        self
+    }
+
+    /// Builder function for setting read size
+    pub fn with_read_size(mut self, read_size: usize) -> Self {
+        self.read_size = Some(read_size);
+        self
+    }
+
+    /// Builder function for setting write size
+    pub fn with_write_size(mut self, write_size: usize) -> Self {
+        self.write_size = Some(write_size);
+        self
+    }
+
+    /// Builder function for setting block cycles
+    pub fn with_block_cycles(mut self, block_cycles: i32) -> Self {
+        self.block_cycles = block_cycles;
+        self
+    }
 
     /// Validate that the image configuration is internally consistent.
     fn validate(&self) -> Result<(), ConfigError> {
@@ -255,7 +345,7 @@ impl ImageConfig {
 ///
 /// Controls which local directory to pack, how deep to recurse, and
 /// which files to include or exclude via gitignore rules and glob patterns.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DirectoryConfig {
     root: String,
