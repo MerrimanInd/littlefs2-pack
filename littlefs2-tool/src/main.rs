@@ -408,26 +408,34 @@ fn cmd_list(
     let config = image_config_for_reading(config_path, &args.fs, &data)?;
     let mut image = LfsImage::from_data(config, data)?;
 
-    image.mount_and_then(|fs| list_directory(fs, "/", 0))?;
+    image.mount_and_then(|fs| {
+        println!("/");
+        list_directory(fs, "/", "")
+    })?;
 
     Ok(())
 }
 
-fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, depth: usize) -> Result<(), LfsError> {
+fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, prefix: &str) -> Result<(), LfsError> {
     let entries = fs.read_dir(lfs_dir)?;
-    let indent = "  ".repeat(depth);
+    let count = entries.len();
 
-    for entry in entries {
+    for (i, entry) in entries.iter().enumerate() {
+        let is_last = i == count - 1;
+        let connector = if is_last { "╰── " } else { "├── " };
+        let child_prefix = if is_last { "    " } else { "│   " };
+
         if entry.is_dir {
-            println!("{indent}{}/ (dir)", entry.name);
+            println!("{prefix}{connector}{}/ ", entry.name);
             let sub = if lfs_dir == "/" {
                 format!("/{}", entry.name)
             } else {
                 format!("{lfs_dir}/{}", entry.name)
             };
-            list_directory(fs, &sub, depth + 1)?;
+            let next_prefix = format!("{prefix}{child_prefix}");
+            list_directory(fs, &sub, &next_prefix)?;
         } else {
-            println!("{indent}{} ({} bytes)", entry.name, entry.size);
+            println!("{prefix}{connector}{} ({} bytes)", entry.name, entry.size);
         }
     }
 
