@@ -22,7 +22,7 @@
 //! use littlefs2_pack::LfsImage;
 //! use littlefs2_config::ImageConfig;
 //!
-//! let config = ImageConfig::new(
+//! let config = ImageConfig::from(
 //!     4096, // block_size
 //!     256,  // block_count, 1 MiB total
 //!     256, // read_size
@@ -678,7 +678,7 @@ mod tests {
     use super::*;
 
     fn test_config() -> ImageConfig {
-        ImageConfig::new(4096, 16, 256, 256)
+        ImageConfig::from(4096, 16, 256, 256)
     }
 
     #[test]
@@ -799,7 +799,7 @@ mod tests {
 
     #[test]
     fn small_block_size() {
-        let config = ImageConfig::new(128, 64, 16, 16);
+        let config = ImageConfig::from(128, 64, 16, 16);
         let mut image = LfsImage::new(config).unwrap();
         image.format().unwrap();
 
