@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
-use littlefs2_config::{Config, ImageConfig};
-use littlefs2_pack::{LfsError, LfsImage, MountedFs};
-use littlefs2_tool::pack::pack_directory;
+use littlefs2_pack::config::{Config, ImageConfig};
+use littlefs2_pack::littlefs::{LfsError, LfsImage, MountedFs};
+use littlefs2_pack::pack::pack_directory;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -473,7 +473,7 @@ fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use littlefs2_config::ImageConfig;
+    use littlefs2_pack::config::ImageConfig;
     use std::fs;
 
     // -------------------------------------------------------------------------

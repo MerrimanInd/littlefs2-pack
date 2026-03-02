@@ -1,14 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use crate::config::DirectoryConfig;
+use crate::littlefs::MountedFs;
 use ignore::{WalkBuilder, overrides::OverrideBuilder};
-use littlefs2_config::DirectoryConfig;
-use littlefs2_pack::MountedFs;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum PackError {
     #[error("LittleFS error: {0}")]
-    Lfs(#[from] littlefs2_pack::LfsError),
+    Lfs(#[from] crate::littlefs::LfsError),
 
     #[error("directory walk error: {0}")]
     Walk(#[from] ignore::Error),
@@ -247,8 +247,8 @@ pub fn pack_directory_simple(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use littlefs2_config::{Config, DirectoryConfig, ImageConfig};
-    use littlefs2_pack::{LfsError, LfsImage};
+    use crate::config::{Config, DirectoryConfig, ImageConfig};
+    use crate::littlefs::{LfsError, LfsImage};
     use std::fs;
 
     // -------------------------------------------------------------------------

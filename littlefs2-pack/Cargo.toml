@@ -10,8 +10,15 @@ categories = ["embedded", "filesystem"]
 license = "MIT"
 
 [dependencies]
-clap = { version = "4.5.46", features = ["derive"] }
-littlefs2-config = { version = "0.1.0", path = "../littlefs2-config" }
 littlefs2-core = "0.1.2"
 littlefs2-sys = { version = "0.3.1", features = ["multiversion"] }
 thiserror = "2.0.18"
+globset = "0.4.18"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+toml = "1.0.3"
+ignore = "0.4.25"
+
+
+[dev-dependencies]
+tempfile = "3"
