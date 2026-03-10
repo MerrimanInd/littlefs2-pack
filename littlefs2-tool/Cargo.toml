@@ -4,7 +4,7 @@ description = "A Rust packing and unpacking directories into LittleFS binaries t
 version = "0.1.0"
 edition = "2024"
 authors = ["Xander Cesari <xander@merriman.industries>"]
-repository = "https://github.com/MerrimanInd/littlefs2-tool"
+repository = "https://github.com/MerrimanInd/littlefs2-pack"
 documentation = "https://docs.rs/littlefs2_tool"
 categories = [
   "embedded",

@@ -22,32 +22,33 @@ pub enum PackError {
 
 /// Build a `WalkBuilder` from a `DirectoryConfig`.
 ///
-/// Applie the depth, hidden-file, gitignore, and glob settings
+/// Applies the depth, hidden-file, gitignore, and glob settings
 /// from the TOML configuration.
-pub(crate) fn walker(config: &DirectoryConfig, root: &Path) -> WalkBuilder {
+pub(crate) fn walker(config: &DirectoryConfig) -> WalkBuilder {
+    let root = &config.resolved_root;
     let mut builder = WalkBuilder::new(root);
-    builder.hidden(config.ignore_hidden());
+    builder.hidden(config.ignore_hidden);
 
-    let depth = config.depth();
+    let depth = config.depth;
     if depth >= 0 {
         builder.max_depth(Some(depth as usize));
     }
 
     builder
-        .git_ignore(config.gitignore())
-        .git_global(config.repo_gitignore());
+        .git_ignore(config.gitignore)
+        .git_global(config.repo_gitignore);
 
     let mut overrides = OverrideBuilder::new(root);
 
     // Negate patterns to ignore them
-    for pattern in config.glob_ignores() {
+    for pattern in &config.glob_ignores {
         overrides
             .add(&format!("!{pattern}"))
             .expect("glob patterns are validated when DirectoryConfig is created");
     }
 
     // Include patterns override ignores — added after so they win
-    for pattern in config.glob_includes() {
+    for pattern in &config.glob_includes {
         overrides
             .add(pattern)
             .expect("glob patterns are validated when DirectoryConfig is created");
@@ -85,12 +86,9 @@ fn to_lfs_path(host_path: &Path, root: &Path) -> Result<String, PackError> {
 /// `glob_includes` patterns are handled via a separate rescue walk: a
 /// second pass with all ignore rules disabled that picks up any files
 /// matching an include pattern that the main walk skipped.
-pub fn pack_directory(
-    fs: &MountedFs<'_>,
-    config: &DirectoryConfig,
-    root: &Path,
-) -> Result<(), PackError> {
-    let walk = walker(config, root);
+pub fn pack_directory(fs: &MountedFs<'_>, config: &DirectoryConfig) -> Result<(), PackError> {
+    let root = &config.resolved_root;
+    let walk = walker(config);
 
     let mut dirs: Vec<String> = Vec::new();
     let mut files: Vec<(String, Vec<u8>)> = Vec::new();
@@ -124,7 +122,7 @@ pub fn pack_directory(
 
     // Rescue walk: pick up files matching glob_includes that the main
     // walk skipped (because of hidden-file rules, gitignore, or glob_ignores).
-    if let Some(include_set) = config.include_set() {
+    if let Some(include_set) = &config.include_set {
         let mut rescue = WalkBuilder::new(root);
         rescue
             .hidden(false)
@@ -132,7 +130,7 @@ pub fn pack_directory(
             .git_global(false)
             .git_exclude(false);
 
-        let depth = config.depth();
+        let depth = config.depth;
         if depth >= 0 {
             rescue.max_depth(Some(depth as usize));
         }
@@ -175,7 +173,7 @@ pub fn pack_directory(
                 // The parent might have been skipped by the main walk
                 // (e.g. a hidden directory containing a rescued file).
                 if let Some(parent) = entry.path().parent() {
-                    if parent != root {
+                    if parent != root.as_path() {
                         let parent_lfs = to_lfs_path(parent, root)?;
                         if !seen.contains(&parent_lfs) {
                             seen.insert(parent_lfs.clone());
@@ -247,8 +245,9 @@ pub fn pack_directory_simple(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, DirectoryConfig, ImageConfig};
+    use crate::config::{DirectoryConfig, ImageConfig};
     use crate::littlefs::{LfsError, LfsImage};
+    use globset::{Glob, GlobSetBuilder};
     use std::fs;
 
     // -------------------------------------------------------------------------
@@ -256,7 +255,13 @@ mod tests {
     // -------------------------------------------------------------------------
 
     fn test_image_config() -> ImageConfig {
-        ImageConfig::from(4096, 16, 256, 256)
+        ImageConfig {
+            block_size: 4096,
+            block_count: 16,
+            read_size: 256,
+            write_size: 256,
+            block_cycles: -1,
+        }
     }
 
     /// Wrap pack functions for use inside `mount_and_then` (which requires `LfsError`).
@@ -264,48 +269,41 @@ mod tests {
         r.map_err(|e| LfsError::Io(e.to_string()))
     }
 
-    /// Build a DirectoryConfig by templating a full TOML string.
-    /// Each parameter has a default that can be overridden by name.
+    /// Build a DirectoryConfig directly from parameters.
     fn make_dir_config(
+        root: &Path,
         depth: i32,
         ignore_hidden: bool,
         glob_ignores: &[&str],
         glob_includes: &[&str],
     ) -> DirectoryConfig {
-        let ignores = glob_ignores
-            .iter()
-            .map(|g| format!("\"{g}\""))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let includes = glob_includes
-            .iter()
-            .map(|g| format!("\"{g}\""))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let glob_ignores: Vec<String> = glob_ignores.iter().map(|s| s.to_string()).collect();
+        let glob_includes: Vec<String> = glob_includes.iter().map(|s| s.to_string()).collect();
 
-        let toml = format!(
-            r#"
-[image]
-block_size = 4096
-block_count = 16
-page_size = 256
+        let include_set = if glob_includes.is_empty() {
+            None
+        } else {
+            let mut builder = GlobSetBuilder::new();
+            for pattern in &glob_includes {
+                builder.add(Glob::new(pattern).unwrap());
+            }
+            Some(builder.build().unwrap())
+        };
 
-[directory]
-root = "."
-depth = {depth}
-ignore_hidden = {ignore_hidden}
-gitignore = false
-repo_gitignore = false
-glob_ignores = [{ignores}]
-glob_includes = [{includes}]
-"#
-        );
-        let config: Config = toml::from_str(&toml).unwrap();
-        config.directory
+        DirectoryConfig {
+            resolved_root: root.to_owned(),
+            depth,
+            ignore_hidden,
+            gitignore: false,
+            repo_gitignore: false,
+            glob_ignores,
+            glob_includes,
+            include_set,
+        }
     }
 
-    fn default_dir_config() -> DirectoryConfig {
-        make_dir_config(-1, true, &[], &[])
+    fn default_dir_config(root: &Path) -> DirectoryConfig {
+        make_dir_config(root, -1, true, &[], &[])
     }
 
     /// Create a temp directory with a known file structure:
@@ -380,8 +378,8 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let config = default_dir_config();
-        let files = walk_file_names(walker(&config, dir.path()));
+        let config = default_dir_config(dir.path());
+        let files = walk_file_names(walker(&config));
 
         assert!(!files.contains(&".hidden".to_string()));
         assert!(files.contains(&"index.html".to_string()));
@@ -392,8 +390,8 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let config = make_dir_config(-1, false, &[], &[]);
-        let files = walk_file_names(walker(&config, dir.path()));
+        let config = make_dir_config(dir.path(), -1, false, &[], &[]);
+        let files = walk_file_names(walker(&config));
 
         assert!(files.contains(&".hidden".to_string()));
         assert!(files.contains(&"index.html".to_string()));
@@ -413,8 +411,8 @@ glob_includes = [{includes}]
         fs::write(root.join("a/b/deep.txt"), "deep").unwrap();
         fs::write(root.join("a/b/c/too_deep.txt"), "too deep").unwrap();
 
-        let config = make_dir_config(2, true, &[], &[]);
-        let files = walk_file_names(walker(&config, root));
+        let config = make_dir_config(root, 2, true, &[], &[]);
+        let files = walk_file_names(walker(&config));
 
         assert!(files.contains(&"top.txt".to_string()));
         assert!(files.contains(&"mid.txt".to_string()));
@@ -428,8 +426,8 @@ glob_includes = [{includes}]
         fs::create_dir_all(root.join("a/b/c/d")).unwrap();
         fs::write(root.join("a/b/c/d/deep.txt"), "deep").unwrap();
 
-        let config = default_dir_config();
-        let files = walk_file_names(walker(&config, root));
+        let config = default_dir_config(root);
+        let files = walk_file_names(walker(&config));
 
         assert!(files.contains(&"deep.txt".to_string()));
     }
@@ -443,8 +441,8 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let config = make_dir_config(-1, true, &["*.bin"], &[]);
-        let files = walk_file_names(walker(&config, dir.path()));
+        let config = make_dir_config(dir.path(), -1, true, &["*.bin"], &[]);
+        let files = walk_file_names(walker(&config));
 
         assert!(!files.contains(&"output.bin".to_string()));
         assert!(files.contains(&"index.html".to_string()));
@@ -455,8 +453,8 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let config = make_dir_config(-1, true, &["build"], &[]);
-        let all_paths: Vec<PathBuf> = walker(&config, dir.path())
+        let config = make_dir_config(dir.path(), -1, true, &["build"], &[]);
+        let all_paths: Vec<PathBuf> = walker(&config)
             .build()
             .filter_map(|e| e.ok())
             .filter(|e| e.depth() > 0)
@@ -484,8 +482,8 @@ glob_includes = [{includes}]
         // When a positive override ("keep.bin") is present, the ignore crate
         // treats it as a whitelist: only files matching a positive pattern are
         // included. So "also.txt" is excluded too — it doesn't match "keep.bin".
-        let config = make_dir_config(-1, false, &["*.bin"], &["keep.bin"]);
-        let files = walk_file_names(walker(&config, root));
+        let config = make_dir_config(root, -1, false, &["*.bin"], &["keep.bin"]);
+        let files = walk_file_names(walker(&config));
 
         assert!(files.contains(&"keep.bin".to_string()));
         assert!(!files.contains(&"drop.bin".to_string()));
@@ -501,13 +499,13 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = default_dir_config();
+        let dir_config = default_dir_config(dir.path());
         let mut image = LfsImage::new(test_image_config()).unwrap();
         image.format().unwrap();
 
         image
             .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config, dir.path()))?;
+                pack_err(pack_directory(fs, &dir_config))?;
 
                 assert!(fs.exists("/index.html"));
                 assert!(fs.exists("/css/style.css"));
@@ -529,13 +527,13 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = default_dir_config();
+        let dir_config = default_dir_config(dir.path());
         let mut image = LfsImage::new(test_image_config()).unwrap();
         image.format().unwrap();
 
         image
             .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config, dir.path()))?;
+                pack_err(pack_directory(fs, &dir_config))?;
                 assert!(!fs.exists("/.hidden"));
                 assert!(fs.exists("/index.html"));
                 Ok(())
@@ -548,13 +546,13 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = make_dir_config(-1, false, &[], &[]);
+        let dir_config = make_dir_config(dir.path(), -1, false, &[], &[]);
         let mut image = LfsImage::new(test_image_config()).unwrap();
         image.format().unwrap();
 
         image
             .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config, dir.path()))?;
+                pack_err(pack_directory(fs, &dir_config))?;
                 assert!(fs.exists("/.hidden"));
                 Ok(())
             })
@@ -566,13 +564,13 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = make_dir_config(-1, true, &["build"], &[]);
+        let dir_config = make_dir_config(dir.path(), -1, true, &["build"], &[]);
         let mut image = LfsImage::new(test_image_config()).unwrap();
         image.format().unwrap();
 
         image
             .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config, dir.path()))?;
+                pack_err(pack_directory(fs, &dir_config))?;
                 assert!(!fs.exists("/build"));
                 assert!(!fs.exists("/build/output.bin"));
                 assert!(fs.exists("/index.html"));
@@ -585,13 +583,13 @@ glob_includes = [{includes}]
     fn pack_empty_directory() {
         let dir = tempfile::tempdir().unwrap();
 
-        let dir_config = default_dir_config();
+        let dir_config = default_dir_config(dir.path());
         let mut image = LfsImage::new(test_image_config()).unwrap();
         image.format().unwrap();
 
         image
             .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config, dir.path()))?;
+                pack_err(pack_directory(fs, &dir_config))?;
                 let entries = fs.read_dir("/")?;
                 assert!(entries.is_empty());
                 Ok(())
@@ -608,13 +606,13 @@ glob_includes = [{includes}]
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = default_dir_config();
+        let dir_config = default_dir_config(dir.path());
 
         let pack_once = || {
             let mut image = LfsImage::new(test_image_config()).unwrap();
             image.format().unwrap();
             image
-                .mount_and_then(|fs| pack_err(pack_directory(fs, &dir_config, dir.path())))
+                .mount_and_then(|fs| pack_err(pack_directory(fs, &dir_config)))
                 .unwrap();
             image.into_data()
         };

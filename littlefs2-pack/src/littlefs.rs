@@ -75,23 +75,23 @@ fn to_cpath(path: &str) -> Result<CString, LfsError> {
 // ---------------------------------------------------------------------------
 /// Validate that the config values are acceptable to the LittleFS C library.
 fn validate_for_lfs(config: &ImageConfig) -> Result<(), LfsError> {
-    if config.block_size() < 128 {
+    if config.block_size < 128 {
         return Err(LfsError::InvalidConfig("block_size must be >= 128".into()));
     }
-    if config.block_count() == 0 {
+    if config.block_count == 0 {
         return Err(LfsError::InvalidConfig("block_count must be > 0".into()));
     }
-    if config.read_size() == 0 || config.write_size() == 0 {
+    if config.read_size == 0 || config.write_size == 0 {
         return Err(LfsError::InvalidConfig(
             "read_size and write_size must be > 0".into(),
         ));
     }
-    if config.block_size() % config.read_size() != 0 {
+    if config.block_size % config.read_size != 0 {
         return Err(LfsError::InvalidConfig(
             "block_size must be a multiple of read_size".into(),
         ));
     }
-    if config.block_size() % config.write_size() != 0 {
+    if config.block_size % config.write_size != 0 {
         return Err(LfsError::InvalidConfig(
             "block_size must be a multiple of write_size".into(),
         ));
@@ -101,17 +101,17 @@ fn validate_for_lfs(config: &ImageConfig) -> Result<(), LfsError> {
 
 /// Determine a good cache size for the LittleFS C config.
 fn cache_size(config: &ImageConfig) -> usize {
-    let base = config.read_size().max(config.write_size());
-    if config.block_size() % base == 0 {
+    let base = config.read_size.max(config.write_size);
+    if config.block_size % base == 0 {
         base
     } else {
-        config.block_size()
+        config.block_size
     }
 }
 
 /// Lookahead size in bytes — must be a multiple of 8.
 fn lookahead_size(config: &ImageConfig) -> usize {
-    let bytes_needed = (config.block_count() + 7) / 8;
+    let bytes_needed = (config.block_count + 7) / 8;
     let aligned = ((bytes_needed + 7) / 8) * 8;
     aligned.max(16)
 }
@@ -209,10 +209,10 @@ impl LfsImage {
             prog: Some(Self::lfs_prog),
             erase: Some(Self::lfs_erase),
             sync: Some(Self::lfs_sync),
-            read_size: self.config.read_size() as u32,
-            prog_size: self.config.write_size() as u32,
-            block_size: self.config.block_size() as u32,
-            block_count: self.config.block_count() as u32,
+            read_size: self.config.read_size as u32,
+            prog_size: self.config.write_size as u32,
+            block_size: self.config.block_size as u32,
+            block_count: self.config.block_count as u32,
             block_cycles: -1, // disable wear leveling for image creation
             cache_size: cache_size(&self.config) as u32,
             lookahead_size: lookahead_size(&self.config) as u32,
@@ -634,7 +634,13 @@ mod tests {
     use super::*;
 
     fn test_config() -> ImageConfig {
-        ImageConfig::from(4096, 16, 256, 256)
+        ImageConfig {
+            block_size: 4096,
+            block_count: 16,
+            read_size: 256,
+            write_size: 256,
+            block_cycles: -1,
+        }
     }
 
     #[test]
@@ -728,8 +734,7 @@ mod tests {
 
     #[test]
     fn roundtrip_image_data() {
-        let config = test_config();
-        let mut image = LfsImage::new(config.clone()).unwrap();
+        let mut image = LfsImage::new(test_config()).unwrap();
         image.format().unwrap();
 
         image
@@ -741,7 +746,7 @@ mod tests {
 
         // Serialize and deserialize
         let raw = image.into_data();
-        let mut image2 = LfsImage::from_data(config, raw).unwrap();
+        let mut image2 = LfsImage::from_data(test_config(), raw).unwrap();
 
         image2
             .mount_and_then(|fs| {
@@ -755,7 +760,13 @@ mod tests {
 
     #[test]
     fn small_block_size() {
-        let config = ImageConfig::from(128, 64, 16, 16);
+        let config = ImageConfig {
+            block_size: 128,
+            block_count: 64,
+            read_size: 16,
+            write_size: 16,
+            block_cycles: -1,
+        };
         let mut image = LfsImage::new(config).unwrap();
         image.format().unwrap();
 

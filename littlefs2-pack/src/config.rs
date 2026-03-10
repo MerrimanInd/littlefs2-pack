@@ -32,17 +32,6 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-/// By convention, all struct fields are private with accessor
-/// functions. This macro reduces boilerplate for fields where
-/// the return type matches the field type (Copy types).
-macro_rules! accessor {
-    ($name:ident -> $ty:ty) => {
-        pub fn $name(&self) -> $ty {
-            self.$name
-        }
-    };
-}
-
 /// Errors that can occur when loading or validating a configuration file.
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -106,19 +95,25 @@ pub enum ConfigError {
     },
 }
 
-/// Top-level configuration loaded from a `littlefs.toml` file.
+/// Raw top-level configuration as deserialized from a TOML file.
 ///
-/// Contains both the image parameters and directory settings, along with
-/// the base directory (parent of the TOML file) used to resolve relative paths.
+/// This is an intermediate representation — use [`Config::from_file`] to
+/// obtain a fully validated and resolved [`Config`].
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct RawConfig {
+    image: RawImageConfig,
+    directory: RawDirectoryConfig,
+}
+
+/// A fully validated and resolved configuration.
+///
+/// All fields have been checked for consistency and the directory root
+/// has been resolved to an absolute path. Obtain via [`Config::from_file`].
+#[derive(Debug)]
 pub struct Config {
     pub image: ImageConfig,
     pub directory: DirectoryConfig,
-
-    /// The parent directory of the TOML file, used to resolve relative paths.
-    /// Not part of the TOML schema — populated after deserialization.
-    #[serde(skip)]
     base_dir: PathBuf,
 }
 
@@ -128,24 +123,26 @@ fn default_block_cycles() -> i32 {
 }
 
 impl Config {
-    /// Load and validate a configuration from a TOML file.
+    /// Load, validate, and resolve a configuration from a TOML file.
     ///
-    /// This parses the file, validates image parameters and directory
-    /// settings, and resolves the root directory relative to the TOML
-    /// file's location.
+    /// Parses the file into raw config types, then resolves both the
+    /// image and directory sections into their validated forms.
     pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
         let contents = std::fs::read_to_string(path).map_err(|source| ConfigError::Io {
             path: path.to_owned(),
             source,
         })?;
-        let mut config: Config = toml::from_str(&contents)?;
-        config.base_dir = path.parent().unwrap_or(Path::new(".")).to_owned();
+        let raw: RawConfig = toml::from_str(&contents)?;
+        let base_dir = path.parent().unwrap_or(Path::new(".")).to_owned();
 
-        config.image.validate()?;
-        config.directory.validate()?;
-        config.directory.resolve_root(&config.base_dir)?;
+        let image = raw.image.resolve()?;
+        let directory = raw.directory.resolve(&base_dir)?;
 
-        Ok(config)
+        Ok(Config {
+            image,
+            directory,
+            base_dir,
+        })
     }
 
     /// The parent directory of the TOML file, used to resolve relative paths.
@@ -162,7 +159,7 @@ impl Config {
 /// and `write_size` when they are not explicitly set.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ImageConfig {
+pub struct RawImageConfig {
     block_size: usize,
     block_count: Option<usize>,
     image_size: Option<usize>,
@@ -173,42 +170,50 @@ pub struct ImageConfig {
     block_cycles: i32,
 }
 
-impl ImageConfig {
-    // The filesystem block (erase unit) size in bytes.
-    accessor!(block_size -> usize);
+impl RawImageConfig {
+    /// Validate and resolve into a checked [`ImageConfig`].
+    ///
+    /// All field validation, default resolution (e.g. `page_size` fallback),
+    /// and computed fields (e.g. `block_count` from `image_size`) are handled
+    /// here. The resulting `ImageConfig` contains only concrete values.
+    pub fn resolve(self) -> Result<ImageConfig, ConfigError> {
+        let read_size = self
+            .read_size
+            .or(self.page_size)
+            .ok_or(ConfigError::MissingSize("read_size"))?;
 
-    // Block-cycle count for wear leveling. -1 disables wear leveling.
-    accessor!(block_cycles -> i32);
+        let write_size = self
+            .write_size
+            .or(self.page_size)
+            .ok_or(ConfigError::MissingSize("write_size"))?;
 
-    // Create a new ImageConfig object from a set of parameters, mainly for testing purposes
-    pub fn from(
-        block_size: usize,
-        block_count: usize,
-        read_size: usize,
-        write_size: usize,
-    ) -> Self {
-        Self {
-            block_size,
-            block_count: Some(block_count),
-            image_size: None,
-            page_size: None,
-            read_size: Some(read_size),
-            write_size: Some(write_size),
-            block_cycles: -1,
-        }
+        let block_count = match (self.block_count, self.image_size) {
+            (Some(c), None) => c,
+            (None, Some(s)) if s % self.block_size == 0 => s / self.block_size,
+            (None, Some(s)) => {
+                return Err(ConfigError::ImageSizeAlignment {
+                    image_size: s,
+                    block_size: self.block_size,
+                });
+            }
+            (Some(_), Some(_)) => return Err(ConfigError::BothSizingMethods),
+            (None, None) => return Err(ConfigError::NoSizingMethod),
+        };
+
+        Ok(ImageConfig {
+            block_size: self.block_size,
+            block_count,
+            read_size,
+            write_size,
+            block_cycles: self.block_cycles,
+        })
     }
 
-    /// Create a new unconfigured ImageConfig to use with builder methods
+    /// Create a new unconfigured `RawImageConfig` to use with builder methods.
     ///
-    /// Warning! This constructor and the builder functions will leave
-    /// the ImageConfig in an invalid state during construction. There will
-    /// not be enough settings to properly define the config until they're
-    /// all set and if they're set incorrectly then the config may be over-
-    /// constrained.
-    ///
-    /// After configuration is complete validate it by running either `validate()`
-    /// or use `validated()` which returns `Result<ImageConfig, ConfigError>`,
-    /// more ergonomic for use in builder function chaining.
+    /// The builder starts in an invalid state — fields must be set via
+    /// the `with_*` methods before calling [`resolve`](Self::resolve)
+    /// to obtain a validated [`ImageConfig`].
     pub fn new() -> Self {
         Self {
             block_size: 16,
@@ -219,13 +224,6 @@ impl ImageConfig {
             write_size: None,
             block_cycles: -1,
         }
-    }
-
-    /// Validate the configuraton and return `Result<Self, ConfigError>`,
-    /// for use in builder pattern construction.
-    pub fn validated(self) -> Result<Self, ConfigError> {
-        self.validate()?;
-        Ok(self)
     }
 
     /// Builder function for setting block size
@@ -269,54 +267,25 @@ impl ImageConfig {
         self.block_cycles = block_cycles;
         self
     }
+}
 
-    /// Validate that the image configuration is internally consistent.
-    fn validate(&self) -> Result<(), ConfigError> {
-        if self.read_size.is_none() && self.page_size.is_none() {
-            return Err(ConfigError::MissingSize("read_size"));
-        }
+/// A consistent and validated image configuration.
+///
+/// Construct via [`RawImageConfig::resolve`] for guaranteed validity,
+/// or directly if you are managing correctness yourself.
+#[derive(Debug)]
+pub struct ImageConfig {
+    pub block_size: usize,
+    pub block_count: usize,
+    pub read_size: usize,
+    pub write_size: usize,
+    pub block_cycles: i32,
+}
 
-        if self.write_size.is_none() && self.page_size.is_none() {
-            return Err(ConfigError::MissingSize("write_size"));
-        }
-
-        match (self.block_count, self.image_size) {
-            (Some(_), Some(_)) => Err(ConfigError::BothSizingMethods),
-            (None, None) => Err(ConfigError::NoSizingMethod),
-            (None, Some(s)) if s % self.block_size != 0 => Err(ConfigError::ImageSizeAlignment {
-                image_size: s,
-                block_size: self.block_size,
-            }),
-            _ => Ok(()),
-        }
-    }
-
-    /// Return the block count, either directly or calculated from `image_size / block_size`.
-    pub fn block_count(&self) -> usize {
-        match (self.block_count, self.image_size) {
-            (Some(c), None) => c,
-            (None, Some(s)) => s / self.block_size,
-            _ => unreachable!("Config::validate() ensures exactly one is set"),
-        }
-    }
-
-    /// Return the image size in bytes, either directly or calculated from `block_count * block_size`.
+impl ImageConfig {
+    /// Total image size in bytes (`block_size * block_count`).
     pub fn image_size(&self) -> usize {
-        match (self.block_count, self.image_size) {
-            (None, Some(s)) => s,
-            (Some(c), None) => c * self.block_size,
-            _ => unreachable!("Config::validate() ensures exactly one is set"),
-        }
-    }
-
-    /// Return the read size, falling back to `page_size` if not explicitly set.
-    pub fn read_size(&self) -> usize {
-        self.read_size.or(self.page_size).expect("validated")
-    }
-
-    /// Return the write (program) size, falling back to `page_size` if not explicitly set.
-    pub fn write_size(&self) -> usize {
-        self.write_size.or(self.page_size).expect("validated")
+        self.block_size * self.block_count
     }
 
     /// Write resolved Rust constants to a file in `out_dir` for use with `include!()`.
@@ -332,10 +301,7 @@ impl ImageConfig {
                  pub const BLOCK_COUNT: usize = {};\n\
                  pub const READ_SIZE: usize = {};\n\
                  pub const WRITE_SIZE: usize = {};\n",
-                self.block_size(),
-                self.block_count(),
-                self.read_size(),
-                self.write_size(),
+                self.block_size, self.block_count, self.read_size, self.write_size,
             ),
         )
         .map_err(|source| ConfigError::EmitRust { path, source })
@@ -348,7 +314,7 @@ impl ImageConfig {
 /// which files to include or exclude via gitignore rules and glob patterns.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DirectoryConfig {
+pub struct RawDirectoryConfig {
     root: String,
     depth: i32,
     ignore_hidden: bool,
@@ -358,68 +324,13 @@ pub struct DirectoryConfig {
     glob_includes: Vec<String>,
 }
 
-impl DirectoryConfig {
-    // Maximum recursive directory depth. -1 means unlimited.
-    accessor!(depth -> i32);
-
-    // Whether to skip hidden files and directories.
-    accessor!(ignore_hidden -> bool);
-
-    // Whether to respect `.gitignore` files in the directory tree.
-    accessor!(gitignore -> bool);
-
-    // Whether to also respect the repository-level `.gitignore`.
-    // Only meaningful when `gitignore` is `true`.
-    accessor!(repo_gitignore -> bool);
-
-    /// The configured root directory path (as written in the TOML).
-    pub fn root(&self) -> &str {
-        &self.root
-    }
-
-    /// Glob patterns for files and directories to exclude.
-    pub fn glob_ignores(&self) -> &[String] {
-        &self.glob_ignores
-    }
-
-    /// Glob patterns for files to force-include, superseding all ignore rules.
-    pub fn glob_includes(&self) -> &[String] {
-        &self.glob_includes
-    }
-
-    /// Export the include set. This is a `globset` object
-    /// used for the directory walk to make sure these
-    /// included files are present.
-    pub fn include_set(&self) -> Option<GlobSet> {
-        if self.glob_includes.is_empty() {
-            return None;
-        }
-
-        let mut builder = GlobSetBuilder::new();
-        for pattern in &self.glob_includes {
-            builder.add(Glob::new(pattern).expect("validated in DirectoryConfig::validate"));
-        }
-        Some(
-            builder
-                .build()
-                .expect("validated in DirectoryConfig::validate"),
-        )
-    }
-
-    /// Resolve the root path against a base directory and verify it exists.
-    pub fn resolve_root(&self, base: &Path) -> Result<PathBuf, ConfigError> {
-        let root = base.join(&self.root);
-        if !root.is_dir() {
-            return Err(ConfigError::RootNotFound(root));
-        }
-        Ok(root)
-    }
-
-    /// Validate that the directory configuration is internally consistent.
+impl RawDirectoryConfig {
+    /// Validate and resolve into a checked [`DirectoryConfig`].
     ///
-    /// Checks that depth is valid, gitignore settings are coherent,
-    /// and all glob patterns parse successfully.
-    fn validate(&self) -> Result<(), ConfigError> {
+    /// All field validation (depth, gitignore coherence, glob patterns),
+    /// root path resolution, and glob set compilation are handled here.
+    /// The resulting `DirectoryConfig` is ready to use for packing.
+    pub fn resolve(self, base: &Path) -> Result<DirectoryConfig, ConfigError> {
         if self.depth < -1 {
             return Err(ConfigError::InvalidDepth(self.depth));
         }
@@ -429,21 +340,68 @@ impl DirectoryConfig {
         }
 
         for pattern in &self.glob_ignores {
-            globset::Glob::new(pattern).map_err(|source| ConfigError::InvalidGlob {
+            Glob::new(pattern).map_err(|source| ConfigError::InvalidGlob {
                 pattern: pattern.clone(),
                 source,
             })?;
         }
 
-        for pattern in &self.glob_includes {
-            globset::Glob::new(pattern).map_err(|source| ConfigError::InvalidGlob {
-                pattern: pattern.clone(),
-                source,
-            })?;
+        // Validate and build the include GlobSet in one pass
+        let include_set = if self.glob_includes.is_empty() {
+            None
+        } else {
+            let mut builder = GlobSetBuilder::new();
+            for pattern in &self.glob_includes {
+                let glob = Glob::new(pattern).map_err(|source| ConfigError::InvalidGlob {
+                    pattern: pattern.clone(),
+                    source,
+                })?;
+                builder.add(glob);
+            }
+            Some(builder.build().expect("individual globs already validated"))
+        };
+
+        let resolved_root = base.join(&self.root);
+        if !resolved_root.is_dir() {
+            return Err(ConfigError::RootNotFound(resolved_root));
         }
 
-        Ok(())
+        Ok(DirectoryConfig {
+            resolved_root,
+            depth: self.depth,
+            ignore_hidden: self.ignore_hidden,
+            gitignore: self.gitignore,
+            repo_gitignore: self.repo_gitignore,
+            glob_ignores: self.glob_ignores,
+            glob_includes: self.glob_includes,
+            include_set,
+        })
     }
+}
+
+/// A validated and resolved directory configuration, ready for packing.
+///
+/// Construct via [`RawDirectoryConfig::resolve`] for guaranteed validity,
+/// or directly if you are managing correctness yourself.
+#[derive(Debug)]
+pub struct DirectoryConfig {
+    /// The fully resolved root directory path.
+    pub resolved_root: PathBuf,
+    /// Maximum recursive directory depth. -1 means unlimited.
+    pub depth: i32,
+    /// Whether to skip hidden files and directories.
+    pub ignore_hidden: bool,
+    /// Whether to respect `.gitignore` files in the directory tree.
+    pub gitignore: bool,
+    /// Whether to also respect the repository-level `.gitignore`.
+    pub repo_gitignore: bool,
+    /// Glob patterns for files and directories to exclude.
+    pub glob_ignores: Vec<String>,
+    /// Glob patterns for files to force-include, superseding all ignore rules.
+    pub glob_includes: Vec<String>,
+    /// Compiled glob set for force-included files, or `None` if no
+    /// include patterns were specified. Built from `glob_includes`.
+    pub include_set: Option<GlobSet>,
 }
 
 #[cfg(test)]
@@ -455,14 +413,18 @@ mod tests {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /// Parse a TOML string directly into a Config, skipping file I/O and
-    /// directory resolution. Runs image and directory validation.
+    /// Parse a TOML string, validate, and resolve into a Config.
+    /// Skips file I/O; directory resolves against ".".
     fn parse_and_validate(toml: &str) -> Result<Config, ConfigError> {
-        let mut config: Config = toml::from_str(toml).map_err(ConfigError::Parse)?;
-        config.base_dir = PathBuf::from(".");
-        config.image.validate()?;
-        config.directory.validate()?;
-        Ok(config)
+        let raw: RawConfig = toml::from_str(toml).map_err(ConfigError::Parse)?;
+        let base_dir = PathBuf::from(".");
+        let image = raw.image.resolve()?;
+        let directory = raw.directory.resolve(&base_dir)?;
+        Ok(Config {
+            image,
+            directory,
+            base_dir,
+        })
     }
 
     fn minimal_image_toml(image_section: &str) -> String {
@@ -492,7 +454,7 @@ glob_includes = []
     fn block_count_directly() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.block_count(), 128);
+        assert_eq!(config.image.block_count, 128);
         assert_eq!(config.image.image_size(), 128 * 4096);
     }
 
@@ -500,7 +462,7 @@ glob_includes = []
     fn image_size_calculates_block_count() {
         let toml = minimal_image_toml("image_size = 524288\npage_size = 256");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.block_count(), 128);
+        assert_eq!(config.image.block_count, 128);
         assert_eq!(config.image.image_size(), 524288);
     }
 
@@ -533,8 +495,8 @@ glob_includes = []
     fn page_size_sets_both_read_and_write() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.read_size(), 256);
-        assert_eq!(config.image.write_size(), 256);
+        assert_eq!(config.image.read_size, 256);
+        assert_eq!(config.image.write_size, 256);
     }
 
     #[test]
@@ -543,24 +505,24 @@ glob_includes = []
             "block_count = 128\npage_size = 256\nread_size = 16\nwrite_size = 512",
         );
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.read_size(), 16);
-        assert_eq!(config.image.write_size(), 512);
+        assert_eq!(config.image.read_size, 16);
+        assert_eq!(config.image.write_size, 512);
     }
 
     #[test]
     fn partial_override_with_page_size_fallback() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256\nread_size = 16");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.read_size(), 16);
-        assert_eq!(config.image.write_size(), 256);
+        assert_eq!(config.image.read_size, 16);
+        assert_eq!(config.image.write_size, 256);
     }
 
     #[test]
     fn explicit_read_write_without_page_size() {
         let toml = minimal_image_toml("block_count = 128\nread_size = 16\nwrite_size = 512");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.read_size(), 16);
-        assert_eq!(config.image.write_size(), 512);
+        assert_eq!(config.image.read_size, 16);
+        assert_eq!(config.image.write_size, 512);
     }
 
     #[test]
@@ -585,44 +547,43 @@ glob_includes = []
     fn block_cycles_defaults_to_negative_one() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.block_cycles(), -1);
+        assert_eq!(config.image.block_cycles, -1);
     }
 
     #[test]
     fn block_cycles_explicit() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256\nblock_cycles = 500");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.block_cycles(), 500);
+        assert_eq!(config.image.block_cycles, 500);
     }
 
     // -------------------------------------------------------------------------
-    // Image config: block_size accessor
+    // Image config: block_size resolved
     // -------------------------------------------------------------------------
 
     #[test]
-    fn block_size_accessor() {
+    fn block_size_resolved() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
         let config = parse_and_validate(&toml).unwrap();
-        assert_eq!(config.image.block_size(), 4096);
+        assert_eq!(config.image.block_size, 4096);
     }
 
     // -------------------------------------------------------------------------
-    // Directory config: accessors
+    // Directory config: resolved fields
     // -------------------------------------------------------------------------
 
     #[test]
-    fn directory_accessors() {
+    fn directory_resolved_fields() {
         let toml = minimal_image_toml("block_count = 128\npage_size = 256");
         let config = parse_and_validate(&toml).unwrap();
-        let dir = &config.directory;
 
-        assert_eq!(dir.root(), ".");
-        assert_eq!(dir.depth(), -1);
-        assert!(dir.ignore_hidden());
-        assert!(!dir.gitignore());
-        assert!(!dir.repo_gitignore());
-        assert!(dir.glob_ignores().is_empty());
-        assert!(dir.glob_includes().is_empty());
+        assert!(config.directory.resolved_root.ends_with("."));
+        assert_eq!(config.directory.depth, -1);
+        assert!(config.directory.ignore_hidden);
+        assert!(!config.directory.gitignore);
+        assert!(!config.directory.repo_gitignore);
+        assert!(config.directory.glob_ignores.is_empty());
+        assert!(config.directory.include_set.is_none());
     }
 
     #[test]
@@ -643,14 +604,13 @@ glob_ignores = ["*.bkup", "build"]
 glob_includes = ["important.txt"]
 "#;
         let config = parse_and_validate(toml).unwrap();
-        let dir = &config.directory;
 
-        assert_eq!(dir.depth(), 3);
-        assert!(!dir.ignore_hidden());
-        assert!(dir.gitignore());
-        assert!(dir.repo_gitignore());
-        assert_eq!(dir.glob_ignores(), &["*.bkup", "build"]);
-        assert_eq!(dir.glob_includes(), &["important.txt"]);
+        assert_eq!(config.directory.depth, 3);
+        assert!(!config.directory.ignore_hidden);
+        assert!(config.directory.gitignore);
+        assert!(config.directory.repo_gitignore);
+        assert_eq!(config.directory.glob_ignores, &["*.bkup", "build"]);
+        assert!(config.directory.include_set.is_some());
     }
 
     // -------------------------------------------------------------------------
@@ -762,12 +722,12 @@ glob_includes = ["important.txt", "data/**"]
     }
 
     // -------------------------------------------------------------------------
-    // Directory config: root resolution
+    // Directory config: resolution
     // -------------------------------------------------------------------------
 
     #[test]
     fn resolve_root_existing_directory() {
-        let dir_config = DirectoryConfig {
+        let dir_config = RawDirectoryConfig {
             root: ".".to_string(),
             depth: -1,
             ignore_hidden: true,
@@ -776,13 +736,13 @@ glob_includes = ["important.txt", "data/**"]
             glob_ignores: vec![],
             glob_includes: vec![],
         };
-        let result = dir_config.resolve_root(Path::new("."));
+        let result = dir_config.resolve(Path::new("."));
         assert!(result.is_ok());
     }
 
     #[test]
     fn resolve_root_missing_directory() {
-        let dir_config = DirectoryConfig {
+        let dir_config = RawDirectoryConfig {
             root: "nonexistent_dir_that_should_not_exist".to_string(),
             depth: -1,
             ignore_hidden: true,
@@ -791,7 +751,7 @@ glob_includes = ["important.txt", "data/**"]
             glob_ignores: vec![],
             glob_includes: vec![],
         };
-        let err = dir_config.resolve_root(Path::new(".")).unwrap_err();
+        let err = dir_config.resolve(Path::new(".")).unwrap_err();
         assert!(matches!(err, ConfigError::RootNotFound(_)));
     }
 
@@ -832,14 +792,14 @@ glob_includes = []
         let config = Config::from_file(&toml_path).unwrap();
 
         assert_eq!(config.base_dir(), dir.path());
-        assert_eq!(config.image.block_size(), 4096);
-        assert_eq!(config.image.block_count(), 64);
+        assert_eq!(config.image.block_size, 4096);
+        assert_eq!(config.image.block_count, 64);
         assert_eq!(config.image.image_size(), 64 * 4096);
-        assert_eq!(config.image.read_size(), 16);
-        assert_eq!(config.image.write_size(), 512);
-        assert_eq!(config.image.block_cycles(), 100);
-        assert_eq!(config.directory.root(), "./website");
-        assert!(config.directory.ignore_hidden());
+        assert_eq!(config.image.read_size, 16);
+        assert_eq!(config.image.write_size, 512);
+        assert_eq!(config.image.block_cycles, 100);
+        assert_eq!(config.directory.resolved_root, dir.path().join("website"));
+        assert!(config.directory.ignore_hidden);
     }
 
     #[test]

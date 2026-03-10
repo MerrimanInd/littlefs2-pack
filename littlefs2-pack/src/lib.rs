@@ -22,12 +22,13 @@
 //! use littlefs2_pack::littlefs::LfsImage;
 //! use littlefs2_pack::config::ImageConfig;
 //!
-//! let config = ImageConfig::from(
-//!     4096, // block_size
-//!     256,  // block_count, 1 MiB total
-//!     256, // read_size
-//!     256, // write_size
-//! );
+//! let config = ImageConfig {
+//!     block_size: 4096,
+//!     block_count: 128,
+//!     read_size: 256,
+//!     write_size: 256,
+//!     block_cycles: -1,
+//! };
 //!
 //! let mut image = LfsImage::new(config).unwrap();
 //! image.format().unwrap();
