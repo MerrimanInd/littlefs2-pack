@@ -43,6 +43,29 @@
 //! std::fs::write("filesystem.bin", &binary).unwrap();
 //! ```
 
+use std::path::Path;
+
+use crate::{config::Config, littlefs::LfsImage, pack::pack_directory};
+
 pub mod config;
 pub mod littlefs;
 pub mod pack;
+
+/// Generate a LittleFS image from the LittleFS.toml
+pub fn generate(littlefs_config: &Path) {
+    let config = Config::from_file(littlefs_config).unwrap();
+    let mut image = LfsImage::new(config.image).unwrap();
+    image.format().unwrap();
+    image
+        .mount_and_then(|fs| {
+            pack_directory(fs, &config.directory).unwrap();
+            Ok(())
+        })
+        .unwrap();
+
+    let binary = image.into_data();
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let file_path = format!("{}/filesystem.bin", out_dir);
+
+    std::fs::write(file_path, &binary).unwrap();
+}

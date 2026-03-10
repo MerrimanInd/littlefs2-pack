@@ -101,7 +101,7 @@ pub enum ConfigError {
 /// obtain a fully validated and resolved [`Config`].
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawConfig {
+pub struct RawConfig {
     image: RawImageConfig,
     directory: RawDirectoryConfig,
 }
