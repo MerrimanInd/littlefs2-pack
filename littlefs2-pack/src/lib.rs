@@ -53,7 +53,15 @@ pub mod pack;
 
 /// Generate a LittleFS image from the LittleFS.toml
 pub fn generate(littlefs_config: &Path) {
+    let image_name = String::from("filesystem");
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let img_file_path = format!("{}/{}.bin", out_dir, image_name);
+    let rust_file_path = format!("{}/{}.rs", out_dir, image_name);
+
     let config = Config::from_file(littlefs_config).unwrap();
+
+    config.image.emit_rust(Path::new(&out_dir)).unwrap();
+
     let mut image = LfsImage::new(config.image).unwrap();
     image.format().unwrap();
     image
@@ -64,8 +72,6 @@ pub fn generate(littlefs_config: &Path) {
         .unwrap();
 
     let binary = image.into_data();
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    let file_path = format!("{}/filesystem.bin", out_dir);
 
-    std::fs::write(file_path, &binary).unwrap();
+    std::fs::write(img_file_path, &binary).unwrap();
 }
