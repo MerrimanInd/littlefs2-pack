@@ -1,8 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["examples/build-lfs-image",
+members = [
   "littlefs2-pack",
   "littlefs2-tool",
-  # "examples/esp32-list-lfs-files",
+  "examples/esp32-list-lfs-files",
+  "examples/build-lfs-image",
   # "examples/esp32-littlefs-server",
 ]
+
+default-members = ["littlefs2-pack", "littlefs2-tool"]
+
+[patch.crates-io]
+esp-rom-sys = { git = "https://github.com/esp-rs/esp-hal", branch = "main", package = "esp-rom-sys" }
