@@ -1,0 +1,14 @@
+[image]
+block_size = 1024
+read_size = 16
+write_size = 64
+block_count = 3096
+
+[directory]
+root = "./image"
+depth = -1
+ignore_hidden = true
+gitignore = true
+repo_gitignore = true
+glob_ignores = []
+glob_includes = []
