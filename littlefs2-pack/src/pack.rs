@@ -20,6 +20,19 @@ pub enum PackError {
     InvalidPath(PathBuf),
 }
 
+/// The LFS paths collected during a [`pack_directory`] call.
+///
+/// Both vectors are sorted for deterministic output. Directory paths
+/// include the leading `/` (e.g. `/config`), and file paths include
+/// the full LFS path (e.g. `/config/network.json`).
+#[derive(Clone, Debug, Default)]
+pub struct PackedPaths {
+    /// Directories created in the image (e.g. `"/config"`).
+    pub dirs: Vec<String>,
+    /// Files written to the image (e.g. `"/config/network.json"`).
+    pub files: Vec<String>,
+}
+
 /// Build a `WalkBuilder` from a `DirectoryConfig`.
 ///
 /// Applies the depth, hidden-file, gitignore, and glob settings
@@ -86,7 +99,10 @@ fn to_lfs_path(host_path: &Path, root: &Path) -> Result<String, PackError> {
 /// `glob_includes` patterns are handled via a separate rescue walk: a
 /// second pass with all ignore rules disabled that picks up any files
 /// matching an include pattern that the main walk skipped.
-pub fn pack_directory(fs: &MountedFs<'_>, config: &DirectoryConfig) -> Result<(), PackError> {
+pub fn pack_directory(
+    fs: &MountedFs<'_>,
+    config: &DirectoryConfig,
+) -> Result<PackedPaths, PackError> {
     let root = &config.resolved_root;
     let walk = walker(config);
 
@@ -199,7 +215,11 @@ pub fn pack_directory(fs: &MountedFs<'_>, config: &DirectoryConfig) -> Result<()
         fs.write_file(path, data)?;
     }
 
-    Ok(())
+    let file_paths = files.into_iter().map(|(p, _)| p).collect();
+    Ok(PackedPaths {
+        dirs,
+        files: file_paths,
+    })
 }
 
 /// Simple recursive directory packing without ignore/glob rules.
@@ -265,7 +285,7 @@ mod tests {
     }
 
     /// Wrap pack functions for use inside `mount_and_then` (which requires `LfsError`).
-    fn pack_err(r: Result<(), PackError>) -> Result<(), LfsError> {
+    fn pack_err<T>(r: Result<T, PackError>) -> Result<T, LfsError> {
         r.map_err(|e| LfsError::Io(e.to_string()))
     }
 

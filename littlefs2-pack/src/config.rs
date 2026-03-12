@@ -29,6 +29,8 @@
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -273,7 +275,7 @@ impl RawImageConfig {
 ///
 /// Construct via [`RawImageConfig::resolve`] for guaranteed validity,
 /// or directly if you are managing correctness yourself.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ImageConfig {
     pub block_size: usize,
     pub block_count: usize,
@@ -292,20 +294,185 @@ impl ImageConfig {
     ///
     /// Generates a `littlefs_config.rs` file containing `BLOCK_SIZE`, `BLOCK_COUNT`,
     /// `READ_SIZE`, and `WRITE_SIZE` as `usize` constants.
-    pub fn emit_rust(&self, out_dir: &Path) -> Result<(), ConfigError> {
+    ///
+    /// When `lfs_paths` is `Some((dirs, files))`, a nested `pub mod paths { … }`
+    /// tree is appended that mirrors the directory layout of the packed image.
+    /// Each directory becomes a Rust module with a `DIR` constant holding the
+    /// LFS path, and each file becomes an `UPPER_SNAKE_CASE` `&str` constant.
+    ///
+    /// ```text
+    /// pub mod paths {
+    ///     pub mod config {
+    ///         pub const DIR: &str = "/config";
+    ///         pub const NETWORK_JSON: &str = "/config/network.json";
+    ///     }
+    /// }
+    /// ```
+    pub fn emit_rust(
+        &self,
+        out_dir: &Path,
+        lfs_paths: Option<(&[String], &[String])>,
+    ) -> Result<(), ConfigError> {
         let path = out_dir.join("littlefs_config.rs");
-        std::fs::write(
-            &path,
-            format!(
-                "pub const BLOCK_SIZE: usize = {};\n\
-                 pub const BLOCK_COUNT: usize = {};\n\
-                 pub const READ_SIZE: usize = {};\n\
-                 pub const WRITE_SIZE: usize = {};\n",
-                self.block_size, self.block_count, self.read_size, self.write_size,
-            ),
-        )
-        .map_err(|source| ConfigError::EmitRust { path, source })
+        let mut content = format!(
+            "pub const BLOCK_SIZE: usize = {};\n\
+             pub const BLOCK_COUNT: usize = {};\n\
+             pub const READ_SIZE: usize = {};\n\
+             pub const WRITE_SIZE: usize = {};\n",
+            self.block_size, self.block_count, self.read_size, self.write_size,
+        );
+
+        if let Some((dirs, files)) = lfs_paths {
+            content.push('\n');
+            emit_paths_mod(&mut content, dirs, files);
+        }
+
+        std::fs::write(&path, content).map_err(|source| ConfigError::EmitRust { path, source })
     }
+}
+
+// ---------------------------------------------------------------------------
+// Path-module generation helpers
+// ---------------------------------------------------------------------------
+
+/// A tree node used to build the nested `pub mod paths { … }` structure.
+#[derive(Default)]
+struct PathNode {
+    /// LFS path for the `DIR` constant (set for directory entries).
+    dir_path: Option<String>,
+    /// Files directly inside this directory: `(CONST_NAME, lfs_path)`.
+    files: Vec<(String, String)>,
+    /// Subdirectory modules: `mod_name → child node`.
+    children: BTreeMap<String, PathNode>,
+}
+
+/// Convert a file name (e.g. `network.json`) to `UPPER_SNAKE_CASE` (`NETWORK_JSON`).
+fn to_const_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_uppercase());
+        } else {
+            // Collapse consecutive separators into a single underscore.
+            if !out.ends_with('_') {
+                out.push('_');
+            }
+        }
+    }
+    // Trim leading/trailing underscores.
+    let trimmed = out.trim_matches('_');
+    if trimmed.is_empty() {
+        return "_UNNAMED".to_string();
+    }
+    // Prefix with `_` if the name starts with a digit (not a valid Rust ident start).
+    if trimmed.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{trimmed}")
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Convert a directory name (e.g. `my-config`) to a valid Rust module name (`my_config`).
+fn to_mod_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    let trimmed = out.trim_matches('_').to_string();
+    if trimmed.is_empty() {
+        return "_unnamed".to_string();
+    }
+    if trimmed.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{trimmed}")
+    } else {
+        trimmed
+    }
+}
+
+/// Build a [`PathNode`] tree from sorted directory and file path slices.
+fn build_path_tree(dirs: &[String], files: &[String]) -> PathNode {
+    let mut root = PathNode::default();
+
+    for dir in dirs {
+        let segments = path_segments(dir);
+        let node = walk_to_node(&mut root, &segments);
+        node.dir_path = Some(dir.clone());
+    }
+
+    for file in files {
+        let segments = path_segments(file);
+        if segments.is_empty() {
+            continue;
+        }
+        let (file_name, parent_segs) = segments.split_last().unwrap();
+        let node = walk_to_node(&mut root, parent_segs);
+        node.files.push((to_const_name(file_name), file.clone()));
+    }
+
+    root
+}
+
+/// Split an LFS path like `/config/network.json` into `["config", "network.json"]`.
+fn path_segments(lfs_path: &str) -> Vec<&str> {
+    lfs_path.split('/').filter(|s| !s.is_empty()).collect()
+}
+
+/// Walk (and lazily create) intermediate nodes to reach the node for `segments`.
+fn walk_to_node<'a>(root: &'a mut PathNode, segments: &[&str]) -> &'a mut PathNode {
+    let mut current = root;
+    for &seg in segments {
+        let mod_name = to_mod_name(seg);
+        current = current.children.entry(mod_name).or_default();
+    }
+    current
+}
+
+/// Recursively write the `pub mod …` tree into `out`.
+fn write_node(out: &mut String, node: &PathNode, indent: usize) {
+    let pad = " ".repeat(indent);
+
+    if let Some(ref dir_path) = node.dir_path {
+        let _ = writeln!(out, "{pad}pub const DIR: &str = \"{dir_path}\";");
+    }
+
+    for (const_name, lfs_path) in &node.files {
+        let _ = writeln!(out, "{pad}pub const {const_name}: &str = \"{lfs_path}\";");
+    }
+
+    for (mod_name, child) in &node.children {
+        let _ = writeln!(out, "{pad}pub mod {mod_name} {{");
+        write_node(out, child, indent + 4);
+        let _ = writeln!(out, "{pad}}}");
+    }
+}
+
+/// Append a `pub mod paths { … }` block to `out`.
+fn emit_paths_mod(out: &mut String, dirs: &[String], files: &[String]) {
+    let tree = build_path_tree(dirs, files);
+
+    // If neither dirs nor files produced any content, skip emitting.
+    if tree.children.is_empty() && tree.files.is_empty() {
+        return;
+    }
+
+    out.push_str("pub mod paths {\n");
+
+    // Root-level files (files sitting directly under `/`).
+    for (const_name, lfs_path) in &tree.files {
+        let _ = writeln!(out, "    pub const {const_name}: &str = \"{lfs_path}\";");
+    }
+
+    for (mod_name, child) in &tree.children {
+        let _ = writeln!(out, "    pub mod {mod_name} {{");
+        write_node(out, child, 8);
+        let _ = writeln!(out, "    }}");
+    }
+
+    out.push_str("}\n");
 }
 
 /// Directory traversal settings for collecting files into the image.
@@ -848,13 +1015,48 @@ glob_includes = []
         let config = parse_and_validate(&toml).unwrap();
 
         let dir = tempfile::tempdir().unwrap();
-        config.image.emit_rust(dir.path()).unwrap();
+        config.image.emit_rust(dir.path(), None).unwrap();
 
         let contents = fs::read_to_string(dir.path().join("littlefs_config.rs")).unwrap();
         assert!(contents.contains("pub const BLOCK_SIZE: usize = 4096;"));
         assert!(contents.contains("pub const BLOCK_COUNT: usize = 64;"));
         assert!(contents.contains("pub const READ_SIZE: usize = 16;"));
         assert!(contents.contains("pub const WRITE_SIZE: usize = 512;"));
+        // No paths module when None is passed.
+        assert!(!contents.contains("pub mod paths"));
+    }
+
+    #[test]
+    fn emit_rust_generates_paths_module() {
+        let toml = minimal_image_toml("block_count = 64\npage_size = 256");
+        let config = parse_and_validate(&toml).unwrap();
+
+        let dirs = vec!["/config".to_string(), "/logs".to_string()];
+        let files = vec![
+            "/config/network.json".to_string(),
+            "/index.html".to_string(),
+        ];
+
+        let dir = tempfile::tempdir().unwrap();
+        config
+            .image
+            .emit_rust(dir.path(), Some((&dirs, &files)))
+            .unwrap();
+
+        let contents = fs::read_to_string(dir.path().join("littlefs_config.rs")).unwrap();
+
+        // Image constants still present.
+        assert!(contents.contains("pub const BLOCK_SIZE: usize = 4096;"));
+
+        // Paths module structure.
+        assert!(contents.contains("pub mod paths {"));
+        assert!(contents.contains("pub mod config {"));
+        assert!(contents.contains(r#"pub const DIR: &str = "/config";"#));
+        assert!(contents.contains(r#"pub const NETWORK_JSON: &str = "/config/network.json";"#));
+        assert!(contents.contains("pub mod logs {"));
+        assert!(contents.contains(r#"pub const DIR: &str = "/logs";"#));
+        // Root-level file.
+        assert!(contents.contains(r#"pub const INDEX_HTML: &str = "/index.html";"#));
     }
 
     // -------------------------------------------------------------------------

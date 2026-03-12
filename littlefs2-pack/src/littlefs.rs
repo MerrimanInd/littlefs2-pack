@@ -219,13 +219,20 @@ impl LfsImage {
             read_buffer: self.read_cache.as_mut_ptr() as *mut c_void,
             prog_buffer: self.write_cache.as_mut_ptr() as *mut c_void,
             lookahead_buffer: self.lookahead_buf.as_mut_ptr() as *mut c_void,
-            name_max: 0, // use default (LFS_NAME_MAX)
-            file_max: 0, // use default (LFS_FILE_MAX)
-            attr_max: 0, // use default (LFS_ATTR_MAX)
+            // name_max: 0, // use default (LFS_NAME_MAX)
+            // file_max: 0, // use default (LFS_FILE_MAX)
+            // attr_max: 0, // use default (LFS_ATTR_MAX)
+            // metadata_max: 0,
+            // inline_max: 0,
+            // compact_thresh: 0,
+            // disk_version: 0,
+            name_max: 255,
+            file_max: 2147483647,
+            attr_max: 1022,
             metadata_max: 0,
             inline_max: 0,
             compact_thresh: 0,
-            disk_version: 0,
+            disk_version: 0x00020000,
         }
     }
 

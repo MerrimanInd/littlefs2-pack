@@ -45,7 +45,11 @@
 
 use std::path::Path;
 
-use crate::{config::Config, littlefs::LfsImage, pack::pack_directory};
+use crate::{
+    config::Config,
+    littlefs::LfsImage,
+    pack::{PackedPaths, pack_directory},
+};
 
 pub mod config;
 pub mod littlefs;
@@ -56,19 +60,26 @@ pub fn generate(littlefs_config: &Path) {
     let image_name = String::from("filesystem");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let img_file_path = format!("{}/{}.bin", out_dir, image_name);
-    let rust_file_path = format!("{}/{}.rs", out_dir, image_name);
+    // let rust_file_path = format!("{}/{}.rs", out_dir, image_name);
 
     let config = Config::from_file(littlefs_config).unwrap();
 
-    config.image.emit_rust(Path::new(&out_dir)).unwrap();
-
+    let image_config = config.image.clone();
     let mut image = LfsImage::new(config.image).unwrap();
     image.format().unwrap();
+
+    let mut packed_paths: Option<PackedPaths> = None;
     image
         .mount_and_then(|fs| {
-            pack_directory(fs, &config.directory).unwrap();
+            let paths = pack_directory(fs, &config.directory).unwrap();
+            packed_paths = Some(paths);
             Ok(())
         })
+        .unwrap();
+
+    let packed = packed_paths.unwrap();
+    image_config
+        .emit_rust(Path::new(&out_dir), Some((&packed.dirs, &packed.files)))
         .unwrap();
 
     let binary = image.into_data();

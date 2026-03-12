@@ -290,7 +290,9 @@ fn cmd_pack(config_path: &Option<PathBuf>, args: Pack) -> Result<()> {
     image.format()?;
 
     image.mount_and_then(|fs| match &directory_config {
-        Some(dir_config) => pack_directory(fs, dir_config).map_err(|e| LfsError::Io(e.to_string())),
+        Some(dir_config) => pack_directory(fs, dir_config)
+            .map(|_| ())
+            .map_err(|e| LfsError::Io(e.to_string())),
         None => pack_directory_simple(fs, &root, ""),
     })?;
 
