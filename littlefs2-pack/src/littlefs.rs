@@ -202,6 +202,12 @@ impl LfsImage {
     /// The returned config borrows `self` mutably through the `context` pointer.
     /// The caller must ensure `self` is not moved or dropped while the config
     /// is in use.
+    ///
+    /// This struct hardcodes specific values from name_max on, most notably the
+    /// on `disk_version` param. This is because the `littlefs2` crate that reads
+    /// the image also hardcodes these values (including staying on the disk version
+    /// 2.0). Unfortunately this will just require hardcoded values in both crates
+    /// and this will be checked when upgrading to newer versions of `littlefs2`.
     unsafe fn build_lfs_config(&mut self) -> lfs::lfs_config {
         lfs::lfs_config {
             context: self as *mut LfsImage as *mut c_void,
@@ -219,13 +225,6 @@ impl LfsImage {
             read_buffer: self.read_cache.as_mut_ptr() as *mut c_void,
             prog_buffer: self.write_cache.as_mut_ptr() as *mut c_void,
             lookahead_buffer: self.lookahead_buf.as_mut_ptr() as *mut c_void,
-            // name_max: 0, // use default (LFS_NAME_MAX)
-            // file_max: 0, // use default (LFS_FILE_MAX)
-            // attr_max: 0, // use default (LFS_ATTR_MAX)
-            // metadata_max: 0,
-            // inline_max: 0,
-            // compact_thresh: 0,
-            // disk_version: 0,
             name_max: 255,
             file_max: 2147483647,
             attr_max: 1022,
