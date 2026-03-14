@@ -27,13 +27,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 // ── Generated LittleFS config from build.rs ─────────────────────────────
-// mod littlefs2_generated {
-//     include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
-// }
-
-// use littlefs2_generated as lfs_config;
-
-// ── LittleFS image embedded at build time ───────────────────────────────
 
 #[allow(unused)]
 mod lfs_config {
@@ -41,6 +34,7 @@ mod lfs_config {
 }
 
 // ── RAM-backed Storage impl ─────────────────────────────────────────────
+// Instantiated from the generated littlefs constants
 struct RamStorage<'a> {
     buf: &'a mut [u8],
 }
@@ -170,6 +164,7 @@ fn main() -> ! {
         lfs_config::READ_SIZE,
         lfs_config::WRITE_SIZE,
     );
+
     println!(
         "image_len={} total_size={}",
         lfs_config::IMAGE.len(),
