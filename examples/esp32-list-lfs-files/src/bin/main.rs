@@ -18,7 +18,6 @@ use esp_hal::{
 };
 use esp_println::{self as _, println};
 
-use generic_array::typenum;
 use littlefs2::{driver::Storage, fs::Filesystem, io::Result as LfsResult, path, path::Path};
 
 #[panic_handler]
@@ -28,16 +27,18 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 // ── Generated LittleFS config from build.rs ─────────────────────────────
-mod littlefs2_generated {
-    include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
-}
+// mod littlefs2_generated {
+//     include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
+// }
 
-use littlefs2_generated as lfs_config;
+// use littlefs2_generated as lfs_config;
 
 // ── LittleFS image embedded at build time ───────────────────────────────
-static LFS_IMAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/filesystem.bin"));
 
-const TOTAL_SIZE: usize = lfs_config::BLOCK_SIZE * lfs_config::BLOCK_COUNT;
+#[allow(unused)]
+mod lfs_config {
+    include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
+}
 
 // ── RAM-backed Storage impl ─────────────────────────────────────────────
 struct RamStorage<'a> {
@@ -45,8 +46,8 @@ struct RamStorage<'a> {
 }
 
 impl Storage for RamStorage<'_> {
-    type CACHE_SIZE = typenum::U256;
-    type LOOKAHEAD_SIZE = typenum::U1;
+    type CACHE_SIZE = lfs_config::CacheSize;
+    type LOOKAHEAD_SIZE = lfs_config::LookaheadSize;
 
     const READ_SIZE: usize = lfs_config::READ_SIZE;
     const WRITE_SIZE: usize = lfs_config::WRITE_SIZE;
@@ -57,12 +58,10 @@ impl Storage for RamStorage<'_> {
         buf.copy_from_slice(&self.buf[off..off + buf.len()]);
         Ok(buf.len())
     }
-
     fn write(&mut self, off: usize, data: &[u8]) -> LfsResult<usize> {
         self.buf[off..off + data.len()].copy_from_slice(data);
         Ok(data.len())
     }
-
     fn erase(&mut self, off: usize, len: usize) -> LfsResult<usize> {
         for byte in &mut self.buf[off..off + len] {
             *byte = 0xFF;
@@ -157,12 +156,12 @@ fn main() -> ! {
 
     println!(
         "Copying LFS image ({} bytes) into PSRAM...",
-        LFS_IMAGE.len()
+        lfs_config::IMAGE.len()
     );
 
     // Allocate in PSRAM and copy the image in
-    let mut storage_buf = vec![0u8; TOTAL_SIZE];
-    storage_buf[..LFS_IMAGE.len()].copy_from_slice(LFS_IMAGE);
+    let mut storage_buf = vec![0u8; lfs_config::TOTAL_SIZE];
+    storage_buf[..lfs_config::IMAGE.len()].copy_from_slice(lfs_config::IMAGE);
 
     println!(
         "block_size={} block_count={} read={} write={}",
@@ -171,7 +170,11 @@ fn main() -> ! {
         lfs_config::READ_SIZE,
         lfs_config::WRITE_SIZE,
     );
-    println!("image_len={} total_size={}", LFS_IMAGE.len(), TOTAL_SIZE);
+    println!(
+        "image_len={} total_size={}",
+        lfs_config::IMAGE.len(),
+        lfs_config::TOTAL_SIZE
+    );
 
     let mut storage = RamStorage {
         buf: &mut storage_buf,

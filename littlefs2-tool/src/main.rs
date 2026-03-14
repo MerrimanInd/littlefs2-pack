@@ -69,6 +69,16 @@ pub struct ImageConfigParams {
     /// Block-cycle count for wear leveling (-1 disables).
     #[arg(long, allow_hyphen_values = true)]
     pub block_cycles: Option<i32>,
+
+    /// Cache size in bytes (must be multiple of read_size and write_size,
+    /// and must evenly divide block_size). Defaults to max(read_size, write_size).
+    #[arg(long)]
+    pub cache_size: Option<usize>,
+
+    /// Lookahead buffer size in bytes (must be a multiple of 8).
+    /// Defaults to the smallest valid value that covers all blocks.
+    #[arg(long)]
+    pub lookahead_size: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +111,12 @@ fn image_config_from_cli(cli: &ImageConfigParams) -> Result<ImageConfig> {
     if let Some(w) = cli.write_size {
         builder = builder.with_write_size(w);
     }
+    if let Some(c) = cli.cache_size {
+        builder = builder.with_cache_size(c);
+    }
+    if let Some(l) = cli.lookahead_size {
+        builder = builder.with_lookahead_size(l);
+    }
 
     Ok(builder.resolve()?)
 }
@@ -116,6 +132,22 @@ fn apply_cli_overrides(base: &ImageConfig, cli: &ImageConfigParams) -> ImageConf
         .with_write_size(cli.write_size.unwrap_or(base.write_size))
         .with_block_cycles(cli.block_cycles.unwrap_or(base.block_cycles));
 
+    // Only carry forward the TOML's cache_size if the CLI didn't change any
+    // of the values it depends on (read_size, write_size, block_size).
+    // Otherwise let resolve() recompute a valid default.
+    if let Some(c) = cli.cache_size {
+        builder = builder.with_cache_size(c);
+    } else if cli.read_size.is_none() && cli.write_size.is_none() && cli.block_size.is_none() {
+        builder = builder.with_cache_size(base.cache_size);
+    }
+
+    // Same for lookahead_size: carry forward only if block_count didn't change.
+    if let Some(l) = cli.lookahead_size {
+        builder = builder.with_lookahead_size(l);
+    } else if cli.block_count.is_none() && cli.image_size.is_none() {
+        builder = builder.with_lookahead_size(base.lookahead_size);
+    }
+
     // If the user passed --image-size, use that instead of the TOML's block_count
     if let Some(s) = cli.image_size {
         builder = builder.with_image_size(s);
@@ -125,7 +157,7 @@ fn apply_cli_overrides(base: &ImageConfig, cli: &ImageConfigParams) -> ImageConf
 
     builder
         .resolve()
-        .expect("TOML config was valid, overrides should not invalidate it")
+        .expect("CLI overrides produced an invalid configuration")
 }
 
 /// Resolve an `ImageConfig` for reading an existing image file.
@@ -138,37 +170,42 @@ fn image_config_for_reading(
     data: &[u8],
 ) -> Result<ImageConfig> {
     // Get block_size and read/write sizes from TOML or CLI
-    let (block_size, read_size, write_size, block_cycles) = match config_path {
-        Some(path) => {
-            let config = Config::from_file(path)?;
-            (
-                cli.block_size.unwrap_or(config.image.block_size),
-                cli.read_size.unwrap_or(config.image.read_size),
-                cli.write_size.unwrap_or(config.image.write_size),
-                cli.block_cycles.unwrap_or(config.image.block_cycles),
-            )
-        }
-        None => {
-            let block_size = match cli.block_size {
-                Some(bs) => bs,
-                None => bail!("--block-size is required without --config"),
-            };
-            let read_size = match cli.read_size.or(cli.page_size) {
-                Some(rs) => rs,
-                None => bail!("--page-size or --read-size required without --config"),
-            };
-            let write_size = match cli.write_size.or(cli.page_size) {
-                Some(ws) => ws,
-                None => bail!("--page-size or --write-size required without --config"),
-            };
-            (
-                block_size,
-                read_size,
-                write_size,
-                cli.block_cycles.unwrap_or(-1),
-            )
-        }
-    };
+    let (block_size, read_size, write_size, block_cycles, cache_size, lookahead_size) =
+        match config_path {
+            Some(path) => {
+                let config = Config::from_file(path)?;
+                (
+                    cli.block_size.unwrap_or(config.image.block_size),
+                    cli.read_size.unwrap_or(config.image.read_size),
+                    cli.write_size.unwrap_or(config.image.write_size),
+                    cli.block_cycles.unwrap_or(config.image.block_cycles),
+                    cli.cache_size.or(Some(config.image.cache_size)),
+                    cli.lookahead_size.or(Some(config.image.lookahead_size)),
+                )
+            }
+            None => {
+                let block_size = match cli.block_size {
+                    Some(bs) => bs,
+                    None => bail!("--block-size is required without --config"),
+                };
+                let read_size = match cli.read_size.or(cli.page_size) {
+                    Some(rs) => rs,
+                    None => bail!("--page-size or --read-size required without --config"),
+                };
+                let write_size = match cli.write_size.or(cli.page_size) {
+                    Some(ws) => ws,
+                    None => bail!("--page-size or --write-size required without --config"),
+                };
+                (
+                    block_size,
+                    read_size,
+                    write_size,
+                    cli.block_cycles.unwrap_or(-1),
+                    cli.cache_size,
+                    cli.lookahead_size,
+                )
+            }
+        };
 
     if data.is_empty() || data.len() % block_size != 0 {
         bail!(
@@ -177,13 +214,24 @@ fn image_config_for_reading(
         );
     }
 
-    Ok(ImageConfig {
-        block_size,
-        block_count: data.len() / block_size,
-        read_size,
-        write_size,
-        block_cycles,
-    })
+    let block_count = data.len() / block_size;
+
+    // Build through RawImageConfig so defaults and validation are applied
+    let mut builder = RawImageConfig::new()
+        .with_block_size(block_size)
+        .with_block_count(block_count)
+        .with_read_size(read_size)
+        .with_write_size(write_size)
+        .with_block_cycles(block_cycles);
+
+    if let Some(c) = cache_size {
+        builder = builder.with_cache_size(c);
+    }
+    if let Some(l) = lookahead_size {
+        builder = builder.with_lookahead_size(l);
+    }
+
+    Ok(builder.resolve()?)
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +541,8 @@ mod tests {
             read_size: None,
             write_size: None,
             block_cycles: None,
+            cache_size: None,
+            lookahead_size: None,
         }
     }
 
@@ -662,6 +712,8 @@ glob_includes = []
             read_size: 256,
             write_size: 256,
             block_cycles: -1,
+            cache_size: 256,
+            lookahead_size: 16,
         }
     }
 
@@ -673,6 +725,8 @@ glob_includes = []
             read_size: 16,
             write_size: 512,
             block_cycles: -1,
+            cache_size: 512,
+            lookahead_size: 16,
         };
         let cli = empty_cli();
 
@@ -681,6 +735,8 @@ glob_includes = []
         assert_eq!(config.block_count, 128);
         assert_eq!(config.read_size, 16);
         assert_eq!(config.write_size, 512);
+        assert_eq!(config.cache_size, 512);
+        assert_eq!(config.lookahead_size, 16);
     }
 
     #[test]

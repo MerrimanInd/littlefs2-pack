@@ -281,6 +281,8 @@ mod tests {
             read_size: 256,
             write_size: 256,
             block_cycles: -1,
+            cache_size: 256,
+            lookahead_size: 8,
         }
     }
 

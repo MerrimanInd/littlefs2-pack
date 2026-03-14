@@ -28,6 +28,8 @@
 //!     read_size: 256,
 //!     write_size: 256,
 //!     block_cycles: -1,
+//!     cache_size: 256,
+//!     lookahead_size: 8,
 //! };
 //!
 //! let mut image = LfsImage::new(config).unwrap();
@@ -79,7 +81,11 @@ pub fn generate(littlefs_config: &Path) {
 
     let packed = packed_paths.unwrap();
     image_config
-        .emit_rust(Path::new(&out_dir), Some((&packed.dirs, &packed.files)))
+        .emit_rust(
+            Path::new(&out_dir),
+            "filesystem.bin",
+            Some((&packed.dirs, &packed.files)),
+        )
         .unwrap();
 
     let binary = image.into_data();

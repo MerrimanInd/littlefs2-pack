@@ -99,23 +99,6 @@ fn validate_for_lfs(config: &ImageConfig) -> Result<(), LfsError> {
     Ok(())
 }
 
-/// Determine a good cache size for the LittleFS C config.
-fn cache_size(config: &ImageConfig) -> usize {
-    let base = config.read_size.max(config.write_size);
-    if config.block_size % base == 0 {
-        base
-    } else {
-        config.block_size
-    }
-}
-
-/// Lookahead size in bytes — must be a multiple of 8.
-fn lookahead_size(config: &ImageConfig) -> usize {
-    let bytes_needed = (config.block_count + 7) / 8;
-    let aligned = ((bytes_needed + 7) / 8) * 8;
-    aligned.max(16)
-}
-
 // ---------------------------------------------------------------------------
 // LfsImage — an in-memory block device + LittleFS state
 // ---------------------------------------------------------------------------
@@ -144,14 +127,12 @@ impl LfsImage {
     pub fn new(config: ImageConfig) -> Result<Self, LfsError> {
         validate_for_lfs(&config)?;
         let total = config.image_size();
-        let cache_sz = cache_size(&config) as usize;
-        let la_sz = lookahead_size(&config) as usize;
 
         Ok(LfsImage {
             data: vec![0xFF; total],
-            read_cache: vec![0u8; cache_sz],
-            write_cache: vec![0u8; cache_sz],
-            lookahead_buf: vec![0u8; la_sz],
+            read_cache: vec![0u8; config.cache_size],
+            write_cache: vec![0u8; config.cache_size],
+            lookahead_buf: vec![0u8; config.lookahead_size],
             config,
         })
     }
@@ -167,14 +148,12 @@ impl LfsImage {
                 expected
             )));
         }
-        let cache_sz = cache_size(&config) as usize;
-        let la_sz = lookahead_size(&config) as usize;
 
         Ok(LfsImage {
             data,
-            read_cache: vec![0u8; cache_sz],
-            write_cache: vec![0u8; cache_sz],
-            lookahead_buf: vec![0u8; la_sz],
+            read_cache: vec![0u8; config.cache_size],
+            write_cache: vec![0u8; config.cache_size],
+            lookahead_buf: vec![0u8; config.lookahead_size],
             config,
         })
     }
@@ -220,8 +199,8 @@ impl LfsImage {
             block_size: self.config.block_size as u32,
             block_count: self.config.block_count as u32,
             block_cycles: -1, // disable wear leveling for image creation
-            cache_size: cache_size(&self.config) as u32,
-            lookahead_size: lookahead_size(&self.config) as u32,
+            cache_size: self.config.cache_size as u32,
+            lookahead_size: self.config.lookahead_size as u32,
             read_buffer: self.read_cache.as_mut_ptr() as *mut c_void,
             prog_buffer: self.write_cache.as_mut_ptr() as *mut c_void,
             lookahead_buffer: self.lookahead_buf.as_mut_ptr() as *mut c_void,
@@ -646,6 +625,8 @@ mod tests {
             read_size: 256,
             write_size: 256,
             block_cycles: -1,
+            cache_size: 256,
+            lookahead_size: 8,
         }
     }
 
@@ -772,6 +753,8 @@ mod tests {
             read_size: 16,
             write_size: 16,
             block_cycles: -1,
+            cache_size: 16,
+            lookahead_size: 1,
         };
         let mut image = LfsImage::new(config).unwrap();
         image.format().unwrap();

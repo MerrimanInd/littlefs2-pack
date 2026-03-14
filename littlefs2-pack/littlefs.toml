@@ -37,6 +37,18 @@ block_count = 3096
 # of -1 will be applied.
 block_cycles = -1
 
+# Cache Size & Lookahead Size
+# These two parameters aren't used by `littlefs2-pack` at all but
+# defining them alongside the rest of the image parameters allows
+# this tool to emit a complete impl Storage trait for the on-device
+# `littlefs2` implementation to use and consume
+#
+# Cache size is the size in bytes of the read and write syzes
+# It must be a multiple of both read and write size as well as
+# a divisor of block size.
+cache_size = 256
+# The lookahead size is measured in units of 8 bytes.
+lookahead_size = 8
 
 # The settings relevant to the local directory to be synced to
 # the microcontroller, including path and ignores
