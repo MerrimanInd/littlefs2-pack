@@ -1,0 +1,67 @@
+# This TOML sets the parameters for the LittleFS image
+# This file is then read by both the firmware for use with
+# the on-device bindings and the `littlefs` tool to create
+# the image.
+[image]
+
+# Filesystem block (erase unit) size in bytes.
+# Must be >= 128 and a multiple of both read-size and write-size.
+# Power-of-two values recommended (e.g. 256, 4096).
+block_size = 4096
+
+# Minimum read size / page size in bytes.
+# If only --page-size is given it sets both read and write size.
+page_size = 256
+
+# Minimum read size in bytes (overrides page_size for reads).
+read_size = 16
+
+# Minimum program (write) size in bytes (overrides page_size for writes).
+write_size = 512
+
+#!! Either block_count or image_size should be defined but not both
+#!! image_size is block_size * block_count
+#!! block_count is image_size / block_size
+# Total number of blocks in the filesystem.
+block_count = 3096
+# Total image size in bytes (alternative to --block-count).
+# Must be an exact multiple of --block-size.
+# image_size = 15_998_976
+
+# Block-cycle count for wear leveling.
+# Higher values are more performant but less wear-leveled.
+# -1 (the default) disables wear leveling entirely, which is fine for
+# one-shot image creation. Add wear leveling if your application
+# will be regularly writing to the partition.
+# If this parameter is not set in the TOML file then the default
+# of -1 will be applied.
+block_cycles = -1
+
+
+# The settings relevant to the local directory to be synced to
+# the microcontroller, including path and ignores
+[directory]
+
+# The local root folder of the directory to be synced
+root = "./website"
+
+# The maximum recursive directory depth to sync.
+# -1 is unlimited depth
+depth = -1
+
+# Ignore hidden files and folders
+ignore_hidden = true
+
+# Whether to ignore files and folders as specificed by
+# the local .gitignore files
+gitignore = true
+# Check the repository level .gitignore and ignore files
+# and folders defined there as well
+repo_gitignore = true
+
+# A list of global ignores to add to the ignore list
+glob_ignores = ["*.bkup", "build"]
+
+# A list of global includes that supersede all other
+# ignores, both globs and gitignores
+glob_includes = []

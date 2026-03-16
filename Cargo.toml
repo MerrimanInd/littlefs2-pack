@@ -5,7 +5,7 @@ members = [
   "littlefs2-tool",
   "examples/esp32-list-lfs-files",
   "examples/build-lfs-image",
-  # "examples/esp32-littlefs-server",
+  "examples/esp32-littlefs-server",
 ]
 
 default-members = ["littlefs2-pack", "littlefs2-tool"]
