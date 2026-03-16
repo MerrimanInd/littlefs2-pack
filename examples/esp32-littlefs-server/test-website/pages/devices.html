@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Devices — ESP-Dashboard</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="icon" href="../img/logo.png">
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-inner">
+        <a href="../index.html" class="logo">
+            <img src="img/logo.png" alt="ESP-Dashboard">
+            <span>ESP-Dashboard</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html">Dashboard</a></li>
+            <li><a href="../pages/devices.html">Devices</a></li>
+            <li><a href="../pages/charts.html">Charts</a></li>
+            <li><a href="../pages/gallery.html">Gallery</a></li>
+            <li><a href="../pages/docs.html">Documentation</a></li>
+            <li><a href="../pages/alerts.html">Alerts</a></li>
+            <li><a href="../pages/about.html">About</a></li>
+        </ul>
+    </div>
+</nav>
+
+<div class="container" style="padding-top: 3rem;">
+    <h2 class="section-title">All Devices</h2>
+    <p style="color: var(--text-dim); margin-bottom: 2rem;">
+        Manage and monitor all connected ESP32 sensor nodes. Click on a device for detailed information.
+    </p>
+    <table class="data-table">
+        <thead>
+            <tr><th>ID</th><th>Name</th><th>Location</th><th>Firmware</th><th>IP</th><th>MAC</th><th>Uptime</th><th>Sensors</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>esp32-000</code></td>
+                <td><strong>Sensor Node 1</strong></td>
+                <td>Kitchen</td>
+                <td><code>v2.3.15</code></td>
+                <td><code>192.168.1.100</code></td>
+                <td><code style="font-size:0.8rem">98:ce:eb:91:fd:b9</code></td>
+                <td>199d 23h</td>
+                <td style="font-size:0.85rem">pressure, motion, temperature, humidity</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-001</code></td>
+                <td><strong>Sensor Node 2</strong></td>
+                <td>Attic</td>
+                <td><code>v2.4.7</code></td>
+                <td><code>192.168.1.101</code></td>
+                <td><code style="font-size:0.8rem">34:39:13:7a:34:ef</code></td>
+                <td>13d 23h</td>
+                <td style="font-size:0.85rem">motion, humidity, light, temperature</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-002</code></td>
+                <td><strong>Sensor Node 3</strong></td>
+                <td>Attic</td>
+                <td><code>v2.5.4</code></td>
+                <td><code>192.168.1.102</code></td>
+                <td><code style="font-size:0.8rem">d7:bc:3f:df:39:a7</code></td>
+                <td>45d 20h</td>
+                <td style="font-size:0.85rem">temperature, humidity</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-003</code></td>
+                <td><strong>Sensor Node 4</strong></td>
+                <td>Living Room</td>
+                <td><code>v2.3.9</code></td>
+                <td><code>192.168.1.103</code></td>
+                <td><code style="font-size:0.8rem">c2:38:e2:72:fb:65</code></td>
+                <td>345d 7h</td>
+                <td style="font-size:0.85rem">temperature, humidity, motion, pressure</td>
+                <td><span class="badge badge-error">Offline</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-004</code></td>
+                <td><strong>Sensor Node 5</strong></td>
+                <td>Kitchen</td>
+                <td><code>v2.2.11</code></td>
+                <td><code>192.168.1.104</code></td>
+                <td><code style="font-size:0.8rem">8f:91:93:fd:dd:92</code></td>
+                <td>190d 20h</td>
+                <td style="font-size:0.85rem">light, pressure</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-005</code></td>
+                <td><strong>Sensor Node 6</strong></td>
+                <td>Bedroom</td>
+                <td><code>v2.4.15</code></td>
+                <td><code>192.168.1.105</code></td>
+                <td><code style="font-size:0.8rem">31:7f:2b:4a:a2:39</code></td>
+                <td>193d 20h</td>
+                <td style="font-size:0.85rem">motion, temperature, humidity, light</td>
+                <td><span class="badge badge-warning">Degraded</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-006</code></td>
+                <td><strong>Sensor Node 7</strong></td>
+                <td>Living Room</td>
+                <td><code>v2.6.6</code></td>
+                <td><code>192.168.1.106</code></td>
+                <td><code style="font-size:0.8rem">0b:0b:1c:cd:32:9e</code></td>
+                <td>329d 10h</td>
+                <td style="font-size:0.85rem">light, motion, pressure, temperature, humidity</td>
+                <td><span class="badge badge-warning">Degraded</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-007</code></td>
+                <td><strong>Sensor Node 8</strong></td>
+                <td>Office</td>
+                <td><code>v2.7.15</code></td>
+                <td><code>192.168.1.107</code></td>
+                <td><code style="font-size:0.8rem">20:ae:5a:b6:85:56</code></td>
+                <td>269d 11h</td>
+                <td style="font-size:0.85rem">pressure, humidity</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-008</code></td>
+                <td><strong>Sensor Node 9</strong></td>
+                <td>Kitchen</td>
+                <td><code>v2.7.11</code></td>
+                <td><code>192.168.1.108</code></td>
+                <td><code style="font-size:0.8rem">76:6f:d1:47:3f:00</code></td>
+                <td>91d 14h</td>
+                <td style="font-size:0.85rem">humidity, light, temperature, pressure</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-009</code></td>
+                <td><strong>Sensor Node 10</strong></td>
+                <td>Living Room</td>
+                <td><code>v2.8.7</code></td>
+                <td><code>192.168.1.109</code></td>
+                <td><code style="font-size:0.8rem">4d:4a:23:19:17:34</code></td>
+                <td>80d 7h</td>
+                <td style="font-size:0.85rem">humidity, pressure, light, motion</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-010</code></td>
+                <td><strong>Sensor Node 11</strong></td>
+                <td>Attic</td>
+                <td><code>v2.4.8</code></td>
+                <td><code>192.168.1.110</code></td>
+                <td><code style="font-size:0.8rem">62:61:d6:77:20:6f</code></td>
+                <td>69d 21h</td>
+                <td style="font-size:0.85rem">pressure, motion, light, humidity</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><code>esp32-011</code></td>
+                <td><strong>Sensor Node 12</strong></td>
+                <td>Attic</td>
+                <td><code>v2.7.7</code></td>
+                <td><code>192.168.1.111</code></td>
+                <td><code style="font-size:0.8rem">f9:48:22:06:e7:11</code></td>
+                <td>72d 4h</td>
+                <td style="font-size:0.85rem">motion, light, pressure, temperature, humidity</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2 class="section-title" style="margin-top: 3rem;">Network Topology</h2>
+    <div class="chart-container">
+        <img src="../img/chart-2.png" alt="Network topology">
+    </div>
+</div>
+<footer class="footer">
+    <div class="footer-inner">
+        <div>
+            <h4>ESP-Dashboard</h4>
+            <p style="color: var(--text-dim); font-size: 0.9rem;">
+                Open-source IoT monitoring platform for ESP32 microcontrollers.
+                Monitor sensors, manage devices, and visualize data.
+            </p>
+        </div>
+        <div>
+            <h4>Quick Links</h4>
+            <a href="#">Getting Started</a>
+            <a href="#">API Reference</a>
+            <a href="#">Hardware Guide</a>
+            <a href="#">Community Forum</a>
+        </div>
+        <div>
+            <h4>Resources</h4>
+            <a href="#">GitHub Repository</a>
+            <a href="#">Documentation</a>
+            <a href="#">Release Notes</a>
+            <a href="#">Contributing</a>
+        </div>
+        <div>
+            <h4>Connect</h4>
+            <a href="#">Discord Server</a>
+            <a href="#">Twitter</a>
+            <a href="#">YouTube</a>
+            <a href="#">Newsletter</a>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        &copy; 2024 ESP-Dashboard Project &middot; Test Website for Microcontroller Hosting &middot; <span id="live-clock"></span>
+    </div>
+</footer>
+<script src="../js/main.js"></script>
+<script src="../js/utils.js"></script>
+</body>
+</html>

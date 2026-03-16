@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation — ESP-Dashboard</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="icon" href="../img/logo.png">
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-inner">
+        <a href="../index.html" class="logo">
+            <img src="img/logo.png" alt="ESP-Dashboard">
+            <span>ESP-Dashboard</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html">Dashboard</a></li>
+            <li><a href="../pages/devices.html">Devices</a></li>
+            <li><a href="../pages/charts.html">Charts</a></li>
+            <li><a href="../pages/gallery.html">Gallery</a></li>
+            <li><a href="../pages/docs.html">Documentation</a></li>
+            <li><a href="../pages/alerts.html">Alerts</a></li>
+            <li><a href="../pages/about.html">About</a></li>
+        </ul>
+    </div>
+</nav>
+
+<div class="container" style="padding-top: 3rem;">
+    <h2 class="section-title">Documentation</h2>
+    <div class="docs-content">
+        <div class="docs-sidebar">
+            <a href="#getting-started">Getting Started</a>
+<a href="#hardware">Hardware Setup</a>
+<a href="#api-reference">API Reference</a>
+<a href="#configuration">Configuration</a>
+<a href="#troubleshooting">Troubleshooting</a>
+
+        </div>
+        <div class="docs-main">
+            <div id="getting-started"><h2>Getting Started</h2>
+        <p>ESP-Dashboard is an open-source IoT monitoring platform designed for ESP32 microcontrollers.
+        It provides real-time sensor data visualization, device management, and alerting capabilities.</p>
+        <h3>Prerequisites</h3>
+        <p>Before you begin, make sure you have the following:</p>
+        <p>An ESP32 development board (ESP32-DevKitC or similar), a USB cable for programming,
+        Arduino IDE or PlatformIO installed, Wi-Fi network access, and at least one supported sensor module.</p>
+        <h3>Quick Start</h3>
+        <pre><code># Clone the repository
+git clone https://github.com/esp-dashboard/firmware.git
+cd firmware
+
+# Install dependencies
+pio lib install
+
+# Configure Wi-Fi credentials
+cp config.example.h config.h
+nano config.h
+
+# Build and flash
+pio run --target upload
+
+# Monitor serial output
+pio device monitor</code></pre>
+        <p>After flashing, the ESP32 will connect to your Wi-Fi network and start broadcasting sensor data.
+        The dashboard will be accessible at the device's IP address on port 80.</p>
+    </div>
+<div id="hardware"><h2>Hardware Setup</h2>
+        <h3>Supported Sensors</h3>
+        <p>ESP-Dashboard supports a wide range of I2C, SPI, and analog sensors. The most commonly used
+        sensors include the BME280 (temperature, humidity, pressure), BH1750 (light intensity),
+        PIR motion sensors, and various gas sensors.</p>
+        <img src="../img/photo-02.jpg" alt="Sensor array" style="width:100%;border-radius:8px;margin:1rem 0;">
+        <h3>Wiring Diagram</h3>
+        <p>Connect sensors to the ESP32 using the following pin mapping:</p>
+        <pre><code>BME280 (I2C):
+  SDA → GPIO 21
+  SCL → GPIO 22
+  VCC → 3.3V
+  GND → GND
+
+BH1750 (I2C):
+  SDA → GPIO 21
+  SCL → GPIO 22
+  ADDR → GND (address 0x23)
+  VCC → 3.3V
+  GND → GND
+
+PIR Sensor:
+  OUT → GPIO 34
+  VCC → 3.3V
+  GND → GND</code></pre>
+        <h3>Power Considerations</h3>
+        <p>For battery-powered deployments, ESP-Dashboard supports deep sleep modes with configurable
+        wake intervals. The system consumes approximately 150mA during active transmission and can be
+        reduced to under 10μA in deep sleep mode.</p>
+    </div>
+<div id="api-reference"><h2>API Reference</h2>
+        <h3>REST API Endpoints</h3>
+        <p>The ESP32 exposes a REST API for querying sensor data and managing device configuration.</p>
+        <pre><code>GET /api/sensors
+Returns current readings from all connected sensors.
+
+Response:
+{
+    "temperature": 22.5,
+    "humidity": 55.2,
+    "pressure": 1013.4,
+    "light": 640,
+    "motion": false,
+    "timestamp": 1700000000
+}
+
+GET /api/sensors/history?hours=24
+Returns historical data for the specified time range.
+
+GET /api/device/info
+Returns device information including firmware version,
+uptime, memory usage, and network status.
+
+POST /api/device/config
+Update device configuration parameters.
+
+Body:
+{
+    "sample_interval": 300,
+    "deep_sleep": true,
+    "wifi_power": 8,
+    "mqtt_enabled": true
+}
+
+POST /api/device/restart
+Trigger a device restart.
+
+GET /api/alerts
+Returns recent alert history.</code></pre>
+        <h3>WebSocket API</h3>
+        <p>For real-time data streaming, connect to the WebSocket endpoint:</p>
+        <pre><code>ws://[device-ip]/ws
+
+// Subscribe to sensor updates
+{"action": "subscribe", "sensors": ["temperature", "humidity"]}
+
+// Incoming data format
+{"sensor": "temperature", "value": 22.5, "ts": 1700000000}</code></pre>
+    </div>
+<div id="configuration"><h2>Configuration</h2>
+        <h3>Configuration File</h3>
+        <p>ESP-Dashboard uses a header file for compile-time configuration and a JSON file for runtime
+        settings. The compile-time configuration includes Wi-Fi credentials, MQTT broker settings,
+        and pin assignments.</p>
+        <pre><code>// config.h — Compile-time configuration
+#define WIFI_SSID     "YourNetworkName"
+#define WIFI_PASSWORD "YourPassword"
+#define DEVICE_NAME   "esp32-001"
+#define MQTT_BROKER   "192.168.1.50"
+#define MQTT_PORT     1883
+#define MQTT_USER     "dashboard"
+#define MQTT_PASS     "secret"
+
+// Sensor pins
+#define I2C_SDA       21
+#define I2C_SCL       22
+#define PIR_PIN       34
+#define LED_PIN       2
+
+// Intervals (milliseconds)
+#define SAMPLE_INTERVAL   5000
+#define REPORT_INTERVAL   60000
+#define DISPLAY_INTERVAL  1000</code></pre>
+        <h3>Runtime Configuration</h3>
+        <p>Runtime settings can be adjusted via the web interface or API without reflashing.
+        These are stored in SPIFFS/LittleFS on the ESP32's flash memory.</p>
+        <pre><code>// /config.json — Runtime configuration
+{
+    "hostname": "esp-dashboard",
+    "timezone": "UTC+0",
+    "temp_unit": "C",
+    "alert_thresholds": {
+        "temp_high": 35.0,
+        "temp_low": 5.0,
+        "humidity_high": 80.0,
+        "humidity_low": 20.0
+    },
+    "display": {
+        "brightness": 80,
+        "auto_off": 300,
+        "theme": "dark"
+    },
+    "logging": {
+        "level": "info",
+        "serial": true,
+        "remote": false
+    }
+}</code></pre>
+    </div>
+<div id="troubleshooting"><h2>Troubleshooting</h2>
+        <h3>Common Issues</h3>
+        <p><strong>Device won't connect to Wi-Fi:</strong> Verify your SSID and password in config.h.
+        Ensure the network is 2.4GHz (ESP32 doesn't support 5GHz). Check that the router isn't blocking
+        new devices. Try reducing Wi-Fi TX power in configuration.</p>
+        <p><strong>Sensor readings are NaN or zero:</strong> Check wiring connections, especially I2C
+        pull-up resistors (4.7kΩ on SDA and SCL). Verify sensor I2C address with an I2C scanner sketch.
+        Some sensors require a warm-up period of 1-2 seconds after power-on.</p>
+        <p><strong>Web interface not loading:</strong> Verify the SPIFFS/LittleFS filesystem is
+        properly uploaded. Use <code>pio run --target uploadfs</code> to upload web assets. Check
+        available flash space — the web interface requires approximately 2MB.</p>
+        <p><strong>High memory usage:</strong> Monitor free heap with <code>ESP.getFreeHeap()</code>.
+        Reduce JSON buffer sizes if running low. Consider using streaming JSON for large responses.
+        Disable features you don't need (MQTT, OTA, etc.).</p>
+        <h3>Debug Serial Output</h3>
+        <pre><code># Enable verbose logging
+#define LOG_LEVEL LOG_VERBOSE
+
+# Monitor output at 115200 baud
+pio device monitor --baud 115200
+
+# Expected boot output:
+[  0.000] ESP-Dashboard v2.4.1
+[  0.001] CPU: ESP32 @ 240MHz, 520KB SRAM
+[  0.002] Flash: 4MB, SPIFFS: 1.5MB
+[  0.150] WiFi: Connecting to "HomeNetwork"...
+[  2.340] WiFi: Connected! IP: 192.168.1.105
+[  2.341] mDNS: esp-dashboard.local
+[  2.500] MQTT: Connected to 192.168.1.50:1883
+[  2.510] Sensors: BME280 OK, BH1750 OK, PIR OK
+[  2.520] HTTP: Server started on port 80
+[  2.521] WS: WebSocket server started
+[  2.530] Ready! Free heap: 245KB</code></pre>
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer class="footer">
+    <div class="footer-inner">
+        <div>
+            <h4>ESP-Dashboard</h4>
+            <p style="color: var(--text-dim); font-size: 0.9rem;">
+                Open-source IoT monitoring platform for ESP32 microcontrollers.
+                Monitor sensors, manage devices, and visualize data.
+            </p>
+        </div>
+        <div>
+            <h4>Quick Links</h4>
+            <a href="#">Getting Started</a>
+            <a href="#">API Reference</a>
+            <a href="#">Hardware Guide</a>
+            <a href="#">Community Forum</a>
+        </div>
+        <div>
+            <h4>Resources</h4>
+            <a href="#">GitHub Repository</a>
+            <a href="#">Documentation</a>
+            <a href="#">Release Notes</a>
+            <a href="#">Contributing</a>
+        </div>
+        <div>
+            <h4>Connect</h4>
+            <a href="#">Discord Server</a>
+            <a href="#">Twitter</a>
+            <a href="#">YouTube</a>
+            <a href="#">Newsletter</a>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        &copy; 2024 ESP-Dashboard Project &middot; Test Website for Microcontroller Hosting &middot; <span id="live-clock"></span>
+    </div>
+</footer>
+<script src="../js/main.js"></script>
+<script src="../js/utils.js"></script>
+</body>
+</html>

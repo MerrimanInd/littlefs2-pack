@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About — ESP-Dashboard</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="icon" href="../img/logo.png">
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-inner">
+        <a href="../index.html" class="logo">
+            <img src="img/logo.png" alt="ESP-Dashboard">
+            <span>ESP-Dashboard</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html">Dashboard</a></li>
+            <li><a href="../pages/devices.html">Devices</a></li>
+            <li><a href="../pages/charts.html">Charts</a></li>
+            <li><a href="../pages/gallery.html">Gallery</a></li>
+            <li><a href="../pages/docs.html">Documentation</a></li>
+            <li><a href="../pages/alerts.html">Alerts</a></li>
+            <li><a href="../pages/about.html">About</a></li>
+        </ul>
+    </div>
+</nav>
+
+<section class="hero" style="padding: 3rem 2rem;">
+    <img src="../img/hero-about.png" alt="" class="hero-bg">
+    <div class="hero-content">
+        <h1>About ESP-Dashboard</h1>
+        <p>An open-source IoT monitoring platform built for makers and professionals.</p>
+    </div>
+</section>
+<div class="container">
+    <div class="card-grid">
+        <div class="card">
+            <img src="../img/photo-00.jpg" alt="ESP32">
+            <h3>Built for ESP32</h3>
+            <p>Optimized for the ESP32 family of microcontrollers with support for dual-core
+            processing, Wi-Fi, Bluetooth, and extensive GPIO capabilities.</p>
+        </div>
+        <div class="card">
+            <img src="../img/photo-03.jpg" alt="PCB">
+            <h3>Custom PCB Design</h3>
+            <p>Optional custom PCB designs available for production deployments with integrated
+            sensor headers, power management, and weatherproof enclosures.</p>
+        </div>
+        <div class="card">
+            <img src="../img/photo-06.jpg" alt="Install">
+            <h3>Easy Installation</h3>
+            <p>Flash firmware in minutes with PlatformIO or Arduino IDE. Web-based configuration
+            means no additional software needed after initial setup.</p>
+        </div>
+        <div class="card">
+            <img src="../img/photo-07.jpg" alt="Dashboard">
+            <h3>Real-time Dashboard</h3>
+            <p>Beautiful, responsive web dashboard served directly from the ESP32. No cloud
+            services required — all data stays on your local network.</p>
+        </div>
+        <div class="card">
+            <img src="../img/photo-09.jpg" alt="Network">
+            <h3>Mesh Networking</h3>
+            <p>Support for ESP-NOW mesh networking to extend coverage across large areas.
+            Nodes automatically relay data to the gateway device.</p>
+        </div>
+        <div class="card">
+            <img src="../img/photo-11.jpg" alt="Assembly">
+            <h3>Open Source</h3>
+            <p>Fully open-source firmware, hardware designs, and documentation. Contribute on
+            GitHub or customize for your specific needs.</p>
+        </div>
+    </div>
+
+    <h2 class="section-title">Technical Specifications</h2>
+    <table class="data-table">
+        <thead><tr><th>Specification</th><th>Details</th></tr></thead>
+        <tbody>
+            <tr><td>Microcontroller</td><td>ESP32-WROOM-32E (Dual-core Xtensa LX6, 240MHz)</td></tr>
+            <tr><td>Memory</td><td>520KB SRAM, 4MB Flash (8MB/16MB optional)</td></tr>
+            <tr><td>Connectivity</td><td>Wi-Fi 802.11 b/g/n, Bluetooth 4.2 + BLE</td></tr>
+            <tr><td>Sensors Supported</td><td>BME280, BH1750, PIR, MQ series, Dallas DS18B20, and more</td></tr>
+            <tr><td>Protocols</td><td>HTTP, WebSocket, MQTT, ESP-NOW</td></tr>
+            <tr><td>Power</td><td>5V USB or 3.7V LiPo (with deep sleep support)</td></tr>
+            <tr><td>Web Interface</td><td>Self-hosted, responsive, dark theme, ~2-4MB</td></tr>
+            <tr><td>Data Storage</td><td>SPIFFS/LittleFS, optional SD card, MQTT export</td></tr>
+            <tr><td>OTA Updates</td><td>Over-the-air firmware updates via web interface</td></tr>
+            <tr><td>License</td><td>MIT License</td></tr>
+        </tbody>
+    </table>
+</div>
+<footer class="footer">
+    <div class="footer-inner">
+        <div>
+            <h4>ESP-Dashboard</h4>
+            <p style="color: var(--text-dim); font-size: 0.9rem;">
+                Open-source IoT monitoring platform for ESP32 microcontrollers.
+                Monitor sensors, manage devices, and visualize data.
+            </p>
+        </div>
+        <div>
+            <h4>Quick Links</h4>
+            <a href="#">Getting Started</a>
+            <a href="#">API Reference</a>
+            <a href="#">Hardware Guide</a>
+            <a href="#">Community Forum</a>
+        </div>
+        <div>
+            <h4>Resources</h4>
+            <a href="#">GitHub Repository</a>
+            <a href="#">Documentation</a>
+            <a href="#">Release Notes</a>
+            <a href="#">Contributing</a>
+        </div>
+        <div>
+            <h4>Connect</h4>
+            <a href="#">Discord Server</a>
+            <a href="#">Twitter</a>
+            <a href="#">YouTube</a>
+            <a href="#">Newsletter</a>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        &copy; 2024 ESP-Dashboard Project &middot; Test Website for Microcontroller Hosting &middot; <span id="live-clock"></span>
+    </div>
+</footer>
+<script src="../js/main.js"></script>
+<script src="../js/utils.js"></script>
+</body>
+</html>

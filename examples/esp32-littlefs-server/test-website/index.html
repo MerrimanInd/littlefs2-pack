@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — ESP-Dashboard</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="img/logo.png">
+</head>
+<body>
+<nav class="navbar">
+    <div class="navbar-inner">
+        <a href="index.html" class="logo">
+            <img src="img/logo.png" alt="ESP-Dashboard">
+            <span>ESP-Dashboard</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><a href="pages/devices.html">Devices</a></li>
+            <li><a href="pages/charts.html">Charts</a></li>
+            <li><a href="pages/gallery.html">Gallery</a></li>
+            <li><a href="pages/docs.html">Documentation</a></li>
+            <li><a href="pages/alerts.html">Alerts</a></li>
+            <li><a href="pages/about.html">About</a></li>
+        </ul>
+    </div>
+</nav>
+
+<section class="hero">
+    <img src="img/hero.png" alt="" class="hero-bg">
+    <div class="hero-content">
+        <h1>ESP-Dashboard</h1>
+        <p>Real-time IoT sensor monitoring and device management platform.
+           Built for ESP32 microcontrollers with web-based visualization.</p>
+    </div>
+</section>
+
+<div class="container">
+    <h2 class="section-title">Live Sensor Readings</h2>
+    <div class="card-grid">
+        <div class="sensor-card">
+            <img src="img/icon-temperature.png" alt="temperature">
+            <div>
+                <div class="value" data-sensor="temperature" data-base="22.5"
+                     data-range="3" data-unit="°C">22.5°C</div>
+                <div class="label">Temperature</div>
+            </div>
+        </div>
+        <div class="sensor-card">
+            <img src="img/icon-humidity.png" alt="humidity">
+            <div>
+                <div class="value" data-sensor="humidity" data-base="55"
+                     data-range="15" data-unit="%">55%</div>
+                <div class="label">Humidity</div>
+            </div>
+        </div>
+        <div class="sensor-card">
+            <img src="img/icon-pressure.png" alt="pressure">
+            <div>
+                <div class="value" data-sensor="pressure" data-base="1013"
+                     data-range="5" data-unit="hPa">1013hPa</div>
+                <div class="label">Pressure</div>
+            </div>
+        </div>
+        <div class="sensor-card">
+            <img src="img/icon-light.png" alt="light">
+            <div>
+                <div class="value" data-sensor="light" data-base="640"
+                     data-range="200" data-unit="lux">640lux</div>
+                <div class="label">Light</div>
+            </div>
+        </div>
+        <div class="sensor-card">
+            <img src="img/icon-motion.png" alt="motion">
+            <div>
+                <div class="value" data-sensor="motion" data-base="1"
+                     data-range="1" data-unit="">1</div>
+                <div class="label">Motion</div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Recent Trends</h2>
+    <div class="chart-container">
+        <h3>Temperature (24h)</h3>
+        <img src="img/chart-0.png" alt="Temperature chart">
+    </div>
+    <div class="chart-container">
+        <h3>Humidity (24h)</h3>
+        <img src="img/chart-1.png" alt="Humidity chart">
+    </div>
+
+    <h2 class="section-title">Device Overview</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Device</th><th>Location</th><th>Firmware</th><th>IP Address</th><th>Uptime</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Sensor Node 1</strong><br><small style="color:var(--text-dim)">esp32-000</small></td>
+                <td>Kitchen</td>
+                <td><code>v2.3.15</code></td>
+                <td><code>192.168.1.100</code></td>
+                <td>199d 23h</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><strong>Sensor Node 2</strong><br><small style="color:var(--text-dim)">esp32-001</small></td>
+                <td>Attic</td>
+                <td><code>v2.4.7</code></td>
+                <td><code>192.168.1.101</code></td>
+                <td>13d 23h</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><strong>Sensor Node 3</strong><br><small style="color:var(--text-dim)">esp32-002</small></td>
+                <td>Attic</td>
+                <td><code>v2.5.4</code></td>
+                <td><code>192.168.1.102</code></td>
+                <td>45d 20h</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><strong>Sensor Node 4</strong><br><small style="color:var(--text-dim)">esp32-003</small></td>
+                <td>Living Room</td>
+                <td><code>v2.3.9</code></td>
+                <td><code>192.168.1.103</code></td>
+                <td>345d 7h</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><strong>Sensor Node 5</strong><br><small style="color:var(--text-dim)">esp32-004</small></td>
+                <td>Kitchen</td>
+                <td><code>v2.2.11</code></td>
+                <td><code>192.168.1.104</code></td>
+                <td>190d 20h</td>
+                <td><span class="badge badge-info">Online</span></td>
+            </tr>
+            <tr>
+                <td><strong>Sensor Node 6</strong><br><small style="color:var(--text-dim)">esp32-005</small></td>
+                <td>Bedroom</td>
+                <td><code>v2.4.15</code></td>
+                <td><code>192.168.1.105</code></td>
+                <td>193d 20h</td>
+                <td><span class="badge badge-warning">Warning</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+<footer class="footer">
+    <div class="footer-inner">
+        <div>
+            <h4>ESP-Dashboard</h4>
+            <p style="color: var(--text-dim); font-size: 0.9rem;">
+                Open-source IoT monitoring platform for ESP32 microcontrollers.
+                Monitor sensors, manage devices, and visualize data.
+            </p>
+        </div>
+        <div>
+            <h4>Quick Links</h4>
+            <a href="#">Getting Started</a>
+            <a href="#">API Reference</a>
+            <a href="#">Hardware Guide</a>
+            <a href="#">Community Forum</a>
+        </div>
+        <div>
+            <h4>Resources</h4>
+            <a href="#">GitHub Repository</a>
+            <a href="#">Documentation</a>
+            <a href="#">Release Notes</a>
+            <a href="#">Contributing</a>
+        </div>
+        <div>
+            <h4>Connect</h4>
+            <a href="#">Discord Server</a>
+            <a href="#">Twitter</a>
+            <a href="#">YouTube</a>
+            <a href="#">Newsletter</a>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        &copy; 2024 ESP-Dashboard Project &middot; Test Website for Microcontroller Hosting &middot; <span id="live-clock"></span>
+    </div>
+</footer>
+<script src="js/main.js"></script>
+<script src="js/utils.js"></script>
+</body>
+</html>

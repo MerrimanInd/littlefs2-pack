@@ -2,6 +2,9 @@ use embassy_net::Stack;
 use embassy_time::Duration;
 use esp_alloc as _;
 use picoserve::{AppBuilder, AppRouter, Router, response::File, routing};
+use crate::fs::lfs_config;
+
+// ── Web Application ─────────────────────────────
 
 pub struct Application;
 
@@ -11,7 +14,8 @@ impl AppBuilder for Application {
     fn build_app(self) -> picoserve::Router<Self::PathRouter> {
         picoserve::Router::new().route(
             "/",
-            routing::get_service(File::html(include_str!("index.html"))),
+            // routing::get_service(File::html(include_str!("index.html"))),
+            routing::get_service(File::html(lfs_config::paths::INDEX_HTML)),
         )
     }
 }

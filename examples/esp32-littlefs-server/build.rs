@@ -1,4 +1,9 @@
+use littlefs2_pack;
+use std::path::Path;
+
 fn main() {
+    littlefs2_pack::generate(&Path::new("./littlefs.toml"));
+
     linker_be_nice();
     println!("cargo:rustc-link-arg=-Tdefmt.x");
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)

@@ -1,7 +1,7 @@
 [package]
 edition = "2024"
 name = "esp32-littlefs-server"
-rust-version = "1.88"
+rust-version = "1.93"
 version = "0.1.0"
 
 [[bin]]
@@ -9,7 +9,12 @@ name = "esp32-littlefs-server"
 path = "./src/bin/main.rs"
 
 [dependencies]
-esp-hal = { version = "~1.0", features = ["defmt", "esp32s3", "unstable"] }
+esp-hal = { version = "~1.0", features = [
+  "defmt",
+  "esp32s3",
+  "unstable",
+  "psram",
+] }
 
 esp-rtos = { version = "0.2.0", features = [
   "defmt",
@@ -61,6 +66,13 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
 critical-section = "1.2.0"
 static_cell = "2.1.1"
 picoserve = { version = "0.18", features = ["embassy"] }
+littlefs2 = { version = "0.6.1", features = ["c-stubs"] }
+generic-array = "1.3.5"
+
+
+[build-dependencies]
+littlefs2-pack = { version = "0.2.1", path = "../../littlefs2-pack" }
+
 
 [profile.dev]
 # Rust debug is too slow.

@@ -1,0 +1,190 @@
+[
+  {
+    "id": "esp32-000",
+    "name": "Sensor Node 1",
+    "location": "Kitchen",
+    "firmware": "v2.3.15",
+    "ip": "192.168.1.100",
+    "mac": "98:ce:eb:91:fd:b9",
+    "uptime_hours": 4799,
+    "last_seen": 1700000919,
+    "sensors": [
+      "pressure",
+      "motion",
+      "temperature",
+      "humidity"
+    ]
+  },
+  {
+    "id": "esp32-001",
+    "name": "Sensor Node 2",
+    "location": "Attic",
+    "firmware": "v2.4.7",
+    "ip": "192.168.1.101",
+    "mac": "34:39:13:7a:34:ef",
+    "uptime_hours": 335,
+    "last_seen": 1700003524,
+    "sensors": [
+      "motion",
+      "humidity",
+      "light",
+      "temperature"
+    ]
+  },
+  {
+    "id": "esp32-002",
+    "name": "Sensor Node 3",
+    "location": "Attic",
+    "firmware": "v2.5.4",
+    "ip": "192.168.1.102",
+    "mac": "d7:bc:3f:df:39:a7",
+    "uptime_hours": 1100,
+    "last_seen": 1700000565,
+    "sensors": [
+      "temperature",
+      "humidity"
+    ]
+  },
+  {
+    "id": "esp32-003",
+    "name": "Sensor Node 4",
+    "location": "Living Room",
+    "firmware": "v2.3.9",
+    "ip": "192.168.1.103",
+    "mac": "c2:38:e2:72:fb:65",
+    "uptime_hours": 8287,
+    "last_seen": 1700000350,
+    "sensors": [
+      "temperature",
+      "humidity",
+      "motion",
+      "pressure"
+    ]
+  },
+  {
+    "id": "esp32-004",
+    "name": "Sensor Node 5",
+    "location": "Kitchen",
+    "firmware": "v2.2.11",
+    "ip": "192.168.1.104",
+    "mac": "8f:91:93:fd:dd:92",
+    "uptime_hours": 4580,
+    "last_seen": 1700000305,
+    "sensors": [
+      "light",
+      "pressure"
+    ]
+  },
+  {
+    "id": "esp32-005",
+    "name": "Sensor Node 6",
+    "location": "Bedroom",
+    "firmware": "v2.4.15",
+    "ip": "192.168.1.105",
+    "mac": "31:7f:2b:4a:a2:39",
+    "uptime_hours": 4652,
+    "last_seen": 1700000791,
+    "sensors": [
+      "motion",
+      "temperature",
+      "humidity",
+      "light"
+    ]
+  },
+  {
+    "id": "esp32-006",
+    "name": "Sensor Node 7",
+    "location": "Living Room",
+    "firmware": "v2.6.6",
+    "ip": "192.168.1.106",
+    "mac": "0b:0b:1c:cd:32:9e",
+    "uptime_hours": 7906,
+    "last_seen": 1700000765,
+    "sensors": [
+      "light",
+      "motion",
+      "pressure",
+      "temperature",
+      "humidity"
+    ]
+  },
+  {
+    "id": "esp32-007",
+    "name": "Sensor Node 8",
+    "location": "Office",
+    "firmware": "v2.7.15",
+    "ip": "192.168.1.107",
+    "mac": "20:ae:5a:b6:85:56",
+    "uptime_hours": 6467,
+    "last_seen": 1700003571,
+    "sensors": [
+      "pressure",
+      "humidity"
+    ]
+  },
+  {
+    "id": "esp32-008",
+    "name": "Sensor Node 9",
+    "location": "Kitchen",
+    "firmware": "v2.7.11",
+    "ip": "192.168.1.108",
+    "mac": "76:6f:d1:47:3f:00",
+    "uptime_hours": 2198,
+    "last_seen": 1700001903,
+    "sensors": [
+      "humidity",
+      "light",
+      "temperature",
+      "pressure"
+    ]
+  },
+  {
+    "id": "esp32-009",
+    "name": "Sensor Node 10",
+    "location": "Living Room",
+    "firmware": "v2.8.7",
+    "ip": "192.168.1.109",
+    "mac": "4d:4a:23:19:17:34",
+    "uptime_hours": 1927,
+    "last_seen": 1700003325,
+    "sensors": [
+      "humidity",
+      "pressure",
+      "light",
+      "motion"
+    ]
+  },
+  {
+    "id": "esp32-010",
+    "name": "Sensor Node 11",
+    "location": "Attic",
+    "firmware": "v2.4.8",
+    "ip": "192.168.1.110",
+    "mac": "62:61:d6:77:20:6f",
+    "uptime_hours": 1677,
+    "last_seen": 1700000480,
+    "sensors": [
+      "pressure",
+      "motion",
+      "light",
+      "humidity"
+    ]
+  },
+  {
+    "id": "esp32-011",
+    "name": "Sensor Node 12",
+    "location": "Attic",
+    "firmware": "v2.7.7",
+    "ip": "192.168.1.111",
+    "mac": "f9:48:22:06:e7:11",
+    "uptime_hours": 1732,
+    "last_seen": 1700001076,
+    "sensors": [
+      "motion",
+      "light",
+      "pressure",
+      "temperature",
+      "humidity"
+    ]
+  }
+]

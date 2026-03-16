@@ -1,0 +1,1402 @@
+[
+  {
+    "id": 0,
+    "ts": 1701816476,
+    "device": "esp32-002",
+    "level": "warning",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 1,
+    "ts": 1701303910,
+    "device": "esp32-009",
+    "level": "error",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 2,
+    "ts": 1701994010,
+    "device": "esp32-005",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 3,
+    "ts": 1701443661,
+    "device": "esp32-011",
+    "level": "warning",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 4,
+    "ts": 1700726845,
+    "device": "esp32-007",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 5,
+    "ts": 1701769180,
+    "device": "esp32-001",
+    "level": "critical",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 6,
+    "ts": 1702369098,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 7,
+    "ts": 1701053151,
+    "device": "esp32-007",
+    "level": "info",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 8,
+    "ts": 1700116469,
+    "device": "esp32-011",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 9,
+    "ts": 1701928204,
+    "device": "esp32-000",
+    "level": "warning",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 10,
+    "ts": 1702517108,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 11,
+    "ts": 1701171658,
+    "device": "esp32-006",
+    "level": "warning",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 12,
+    "ts": 1702516424,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 13,
+    "ts": 1700513789,
+    "device": "esp32-009",
+    "level": "error",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 14,
+    "ts": 1702588630,
+    "device": "esp32-005",
+    "level": "warning",
+    "message": "Battery level low"
+  },
+  {
+    "id": 15,
+    "ts": 1701050118,
+    "device": "esp32-000",
+    "level": "warning",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 16,
+    "ts": 1701242721,
+    "device": "esp32-000",
+    "level": "warning",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 17,
+    "ts": 1700491419,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 18,
+    "ts": 1700369181,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 19,
+    "ts": 1701973590,
+    "device": "esp32-001",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 20,
+    "ts": 1702498536,
+    "device": "esp32-008",
+    "level": "critical",
+    "message": "Battery level low"
+  },
+  {
+    "id": 21,
+    "ts": 1700196403,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 22,
+    "ts": 1701182417,
+    "device": "esp32-009",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 23,
+    "ts": 1700623567,
+    "device": "esp32-007",
+    "level": "info",
+    "message": "Battery level low"
+  },
+  {
+    "id": 24,
+    "ts": 1702407249,
+    "device": "esp32-003",
+    "level": "info",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 25,
+    "ts": 1701139531,
+    "device": "esp32-003",
+    "level": "error",
+    "message": "Successful health check"
+  },
+  {
+    "id": 26,
+    "ts": 1702242541,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 27,
+    "ts": 1701319031,
+    "device": "esp32-001",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 28,
+    "ts": 1700539518,
+    "device": "esp32-007",
+    "level": "info",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 29,
+    "ts": 1702060946,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Battery level low"
+  },
+  {
+    "id": 30,
+    "ts": 1701982056,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 31,
+    "ts": 1700867235,
+    "device": "esp32-009",
+    "level": "warning",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 32,
+    "ts": 1701819438,
+    "device": "esp32-003",
+    "level": "warning",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 33,
+    "ts": 1700831351,
+    "device": "esp32-007",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 34,
+    "ts": 1702193134,
+    "device": "esp32-007",
+    "level": "warning",
+    "message": "Battery level low"
+  },
+  {
+    "id": 35,
+    "ts": 1701206587,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Successful health check"
+  },
+  {
+    "id": 36,
+    "ts": 1701598953,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 37,
+    "ts": 1702176378,
+    "device": "esp32-003",
+    "level": "error",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 38,
+    "ts": 1701413870,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 39,
+    "ts": 1702080337,
+    "device": "esp32-006",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 40,
+    "ts": 1701181017,
+    "device": "esp32-004",
+    "level": "error",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 41,
+    "ts": 1701876332,
+    "device": "esp32-002",
+    "level": "error",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 42,
+    "ts": 1701642715,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 43,
+    "ts": 1702223442,
+    "device": "esp32-007",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 44,
+    "ts": 1701795164,
+    "device": "esp32-006",
+    "level": "info",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 45,
+    "ts": 1701593624,
+    "device": "esp32-010",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 46,
+    "ts": 1700271597,
+    "device": "esp32-006",
+    "level": "info",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 47,
+    "ts": 1702034641,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 48,
+    "ts": 1701012083,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 49,
+    "ts": 1700316622,
+    "device": "esp32-009",
+    "level": "warning",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 50,
+    "ts": 1702035670,
+    "device": "esp32-008",
+    "level": "info",
+    "message": "Battery level low"
+  },
+  {
+    "id": 51,
+    "ts": 1700482169,
+    "device": "esp32-006",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 52,
+    "ts": 1700813332,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 53,
+    "ts": 1700532120,
+    "device": "esp32-011",
+    "level": "error",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 54,
+    "ts": 1700202914,
+    "device": "esp32-006",
+    "level": "warning",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 55,
+    "ts": 1702158835,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 56,
+    "ts": 1702082468,
+    "device": "esp32-006",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 57,
+    "ts": 1700993309,
+    "device": "esp32-007",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 58,
+    "ts": 1700503816,
+    "device": "esp32-011",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 59,
+    "ts": 1700982302,
+    "device": "esp32-005",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 60,
+    "ts": 1701593962,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 61,
+    "ts": 1700419329,
+    "device": "esp32-008",
+    "level": "critical",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 62,
+    "ts": 1701346669,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 63,
+    "ts": 1700615644,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 64,
+    "ts": 1700220119,
+    "device": "esp32-007",
+    "level": "info",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 65,
+    "ts": 1702320360,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 66,
+    "ts": 1702121522,
+    "device": "esp32-008",
+    "level": "warning",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 67,
+    "ts": 1702315842,
+    "device": "esp32-006",
+    "level": "error",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 68,
+    "ts": 1700957664,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 69,
+    "ts": 1702426702,
+    "device": "esp32-002",
+    "level": "info",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 70,
+    "ts": 1701757673,
+    "device": "esp32-004",
+    "level": "warning",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 71,
+    "ts": 1701842621,
+    "device": "esp32-000",
+    "level": "info",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 72,
+    "ts": 1701943056,
+    "device": "esp32-011",
+    "level": "warning",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 73,
+    "ts": 1701913779,
+    "device": "esp32-005",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 74,
+    "ts": 1702397377,
+    "device": "esp32-001",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 75,
+    "ts": 1700004755,
+    "device": "esp32-007",
+    "level": "critical",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 76,
+    "ts": 1701388301,
+    "device": "esp32-000",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 77,
+    "ts": 1701957774,
+    "device": "esp32-011",
+    "level": "info",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 78,
+    "ts": 1702490260,
+    "device": "esp32-008",
+    "level": "info",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 79,
+    "ts": 1700877712,
+    "device": "esp32-003",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 80,
+    "ts": 1701068245,
+    "device": "esp32-002",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 81,
+    "ts": 1701887855,
+    "device": "esp32-003",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 82,
+    "ts": 1700146370,
+    "device": "esp32-009",
+    "level": "error",
+    "message": "Battery level low"
+  },
+  {
+    "id": 83,
+    "ts": 1700079807,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 84,
+    "ts": 1701276153,
+    "device": "esp32-005",
+    "level": "error",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 85,
+    "ts": 1702114729,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 86,
+    "ts": 1700451303,
+    "device": "esp32-003",
+    "level": "warning",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 87,
+    "ts": 1701376381,
+    "device": "esp32-002",
+    "level": "error",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 88,
+    "ts": 1701275470,
+    "device": "esp32-007",
+    "level": "error",
+    "message": "Battery level low"
+  },
+  {
+    "id": 89,
+    "ts": 1700148631,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 90,
+    "ts": 1701722422,
+    "device": "esp32-006",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 91,
+    "ts": 1702013635,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 92,
+    "ts": 1700135164,
+    "device": "esp32-000",
+    "level": "info",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 93,
+    "ts": 1701281304,
+    "device": "esp32-005",
+    "level": "error",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 94,
+    "ts": 1701788484,
+    "device": "esp32-003",
+    "level": "error",
+    "message": "Successful health check"
+  },
+  {
+    "id": 95,
+    "ts": 1701930090,
+    "device": "esp32-005",
+    "level": "info",
+    "message": "Successful health check"
+  },
+  {
+    "id": 96,
+    "ts": 1700737819,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Battery level low"
+  },
+  {
+    "id": 97,
+    "ts": 1701984534,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 98,
+    "ts": 1700239156,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 99,
+    "ts": 1700758570,
+    "device": "esp32-007",
+    "level": "error",
+    "message": "Successful health check"
+  },
+  {
+    "id": 100,
+    "ts": 1702259441,
+    "device": "esp32-000",
+    "level": "info",
+    "message": "Battery level low"
+  },
+  {
+    "id": 101,
+    "ts": 1700378623,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Battery level low"
+  },
+  {
+    "id": 102,
+    "ts": 1700848452,
+    "device": "esp32-002",
+    "level": "error",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 103,
+    "ts": 1701721680,
+    "device": "esp32-003",
+    "level": "warning",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 104,
+    "ts": 1700705497,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 105,
+    "ts": 1700193601,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Successful health check"
+  },
+  {
+    "id": 106,
+    "ts": 1701373687,
+    "device": "esp32-010",
+    "level": "error",
+    "message": "Battery level low"
+  },
+  {
+    "id": 107,
+    "ts": 1701042203,
+    "device": "esp32-003",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 108,
+    "ts": 1701034944,
+    "device": "esp32-010",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 109,
+    "ts": 1701285416,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Battery level low"
+  },
+  {
+    "id": 110,
+    "ts": 1700870076,
+    "device": "esp32-006",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 111,
+    "ts": 1700803673,
+    "device": "esp32-009",
+    "level": "warning",
+    "message": "Battery level low"
+  },
+  {
+    "id": 112,
+    "ts": 1701453637,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 113,
+    "ts": 1701914593,
+    "device": "esp32-010",
+    "level": "error",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 114,
+    "ts": 1700682719,
+    "device": "esp32-000",
+    "level": "warning",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 115,
+    "ts": 1701570524,
+    "device": "esp32-005",
+    "level": "info",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 116,
+    "ts": 1701139135,
+    "device": "esp32-003",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 117,
+    "ts": 1702405194,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 118,
+    "ts": 1702276031,
+    "device": "esp32-005",
+    "level": "warning",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 119,
+    "ts": 1702457626,
+    "device": "esp32-005",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 120,
+    "ts": 1701642873,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 121,
+    "ts": 1701016583,
+    "device": "esp32-008",
+    "level": "error",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 122,
+    "ts": 1701433336,
+    "device": "esp32-009",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 123,
+    "ts": 1701016355,
+    "device": "esp32-000",
+    "level": "info",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 124,
+    "ts": 1700750947,
+    "device": "esp32-008",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 125,
+    "ts": 1702430905,
+    "device": "esp32-004",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 126,
+    "ts": 1701242545,
+    "device": "esp32-000",
+    "level": "info",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 127,
+    "ts": 1700997590,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 128,
+    "ts": 1701119407,
+    "device": "esp32-008",
+    "level": "error",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 129,
+    "ts": 1701690683,
+    "device": "esp32-004",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 130,
+    "ts": 1700186741,
+    "device": "esp32-010",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 131,
+    "ts": 1701104743,
+    "device": "esp32-001",
+    "level": "warning",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 132,
+    "ts": 1700997289,
+    "device": "esp32-003",
+    "level": "error",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 133,
+    "ts": 1702260031,
+    "device": "esp32-009",
+    "level": "critical",
+    "message": "Battery level low"
+  },
+  {
+    "id": 134,
+    "ts": 1701519445,
+    "device": "esp32-006",
+    "level": "error",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 135,
+    "ts": 1702414773,
+    "device": "esp32-009",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 136,
+    "ts": 1700789044,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 137,
+    "ts": 1702074417,
+    "device": "esp32-001",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 138,
+    "ts": 1701745128,
+    "device": "esp32-003",
+    "level": "info",
+    "message": "Battery level low"
+  },
+  {
+    "id": 139,
+    "ts": 1700615235,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 140,
+    "ts": 1701930239,
+    "device": "esp32-000",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 141,
+    "ts": 1700894677,
+    "device": "esp32-006",
+    "level": "warning",
+    "message": "Battery level low"
+  },
+  {
+    "id": 142,
+    "ts": 1701309557,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 143,
+    "ts": 1700430919,
+    "device": "esp32-011",
+    "level": "error",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 144,
+    "ts": 1702549295,
+    "device": "esp32-000",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 145,
+    "ts": 1701223278,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 146,
+    "ts": 1702399832,
+    "device": "esp32-006",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 147,
+    "ts": 1700182472,
+    "device": "esp32-008",
+    "level": "critical",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 148,
+    "ts": 1701723173,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 149,
+    "ts": 1700564208,
+    "device": "esp32-007",
+    "level": "info",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 150,
+    "ts": 1701916805,
+    "device": "esp32-010",
+    "level": "warning",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 151,
+    "ts": 1701025698,
+    "device": "esp32-006",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 152,
+    "ts": 1700633570,
+    "device": "esp32-005",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 153,
+    "ts": 1701557795,
+    "device": "esp32-011",
+    "level": "info",
+    "message": "Successful health check"
+  },
+  {
+    "id": 154,
+    "ts": 1700850285,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 155,
+    "ts": 1700122298,
+    "device": "esp32-002",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 156,
+    "ts": 1702255265,
+    "device": "esp32-003",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 157,
+    "ts": 1700258740,
+    "device": "esp32-003",
+    "level": "warning",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 158,
+    "ts": 1700918820,
+    "device": "esp32-004",
+    "level": "critical",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 159,
+    "ts": 1700412442,
+    "device": "esp32-006",
+    "level": "error",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 160,
+    "ts": 1701361669,
+    "device": "esp32-009",
+    "level": "error",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 161,
+    "ts": 1700367205,
+    "device": "esp32-001",
+    "level": "warning",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 162,
+    "ts": 1701044043,
+    "device": "esp32-007",
+    "level": "critical",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 163,
+    "ts": 1701794185,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Successful health check"
+  },
+  {
+    "id": 164,
+    "ts": 1701151762,
+    "device": "esp32-002",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 165,
+    "ts": 1702187740,
+    "device": "esp32-003",
+    "level": "critical",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 166,
+    "ts": 1702001511,
+    "device": "esp32-011",
+    "level": "info",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 167,
+    "ts": 1701184154,
+    "device": "esp32-008",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 168,
+    "ts": 1702178571,
+    "device": "esp32-001",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 169,
+    "ts": 1700678450,
+    "device": "esp32-002",
+    "level": "info",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 170,
+    "ts": 1700530702,
+    "device": "esp32-004",
+    "level": "error",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 171,
+    "ts": 1702112159,
+    "device": "esp32-010",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 172,
+    "ts": 1700064464,
+    "device": "esp32-000",
+    "level": "error",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 173,
+    "ts": 1701140883,
+    "device": "esp32-004",
+    "level": "critical",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 174,
+    "ts": 1701068908,
+    "device": "esp32-009",
+    "level": "info",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 175,
+    "ts": 1701019486,
+    "device": "esp32-005",
+    "level": "critical",
+    "message": "Network latency spike"
+  },
+  {
+    "id": 176,
+    "ts": 1701186849,
+    "device": "esp32-000",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 177,
+    "ts": 1700200913,
+    "device": "esp32-007",
+    "level": "warning",
+    "message": "Successful health check"
+  },
+  {
+    "id": 178,
+    "ts": 1701517507,
+    "device": "esp32-005",
+    "level": "critical",
+    "message": "Firmware update available"
+  },
+  {
+    "id": 179,
+    "ts": 1701302595,
+    "device": "esp32-008",
+    "level": "error",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 180,
+    "ts": 1701797628,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 181,
+    "ts": 1701768305,
+    "device": "esp32-007",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 182,
+    "ts": 1702393952,
+    "device": "esp32-001",
+    "level": "error",
+    "message": "Battery level low"
+  },
+  {
+    "id": 183,
+    "ts": 1700857140,
+    "device": "esp32-008",
+    "level": "warning",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 184,
+    "ts": 1702004481,
+    "device": "esp32-010",
+    "level": "error",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 185,
+    "ts": 1700592401,
+    "device": "esp32-008",
+    "level": "error",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 186,
+    "ts": 1700994919,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 187,
+    "ts": 1700760958,
+    "device": "esp32-004",
+    "level": "info",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 188,
+    "ts": 1701862104,
+    "device": "esp32-001",
+    "level": "warning",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 189,
+    "ts": 1702494541,
+    "device": "esp32-006",
+    "level": "warning",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 190,
+    "ts": 1701710688,
+    "device": "esp32-002",
+    "level": "info",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 191,
+    "ts": 1702447282,
+    "device": "esp32-011",
+    "level": "critical",
+    "message": "Connection lost momentarily"
+  },
+  {
+    "id": 192,
+    "ts": 1702089100,
+    "device": "esp32-009",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 193,
+    "ts": 1701235961,
+    "device": "esp32-002",
+    "level": "error",
+    "message": "Light sensor anomaly"
+  },
+  {
+    "id": 194,
+    "ts": 1701633656,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Temperature threshold exceeded"
+  },
+  {
+    "id": 195,
+    "ts": 1700882323,
+    "device": "esp32-008",
+    "level": "warning",
+    "message": "Pressure drop detected"
+  },
+  {
+    "id": 196,
+    "ts": 1702279743,
+    "device": "esp32-002",
+    "level": "critical",
+    "message": "Motion detected in restricted zone"
+  },
+  {
+    "id": 197,
+    "ts": 1700037238,
+    "device": "esp32-010",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 198,
+    "ts": 1700197529,
+    "device": "esp32-000",
+    "level": "warning",
+    "message": "Humidity sensor recalibrated"
+  },
+  {
+    "id": 199,
+    "ts": 1700130848,
+    "device": "esp32-006",
+    "level": "info",
+    "message": "Humidity sensor recalibrated"
+  }
+]
