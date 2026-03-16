@@ -60,6 +60,7 @@
         devShells.default = mkShell (
           cEnv
           // {
+            name = "littlefs2_tool";
             buildInputs = [
               rust-bin.stable.latest.default
             ]
@@ -75,6 +76,7 @@
         devShells.esp = mkShell (
           bindgenEnv
           // {
+            name = "lfs2_esp";
             buildInputs = [
               # Don't include rust-bin here — espup manages the toolchain
               rustup
