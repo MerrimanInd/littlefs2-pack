@@ -1,3 +1,5 @@
+use defmt::info;
+use embedded_storage::nor_flash::ReadNorFlash;
 use esp_println::{self as _, println};
 use littlefs2::{driver::Storage, fs::Filesystem, io::Result as LfsResult};
 
@@ -5,11 +7,18 @@ extern crate alloc;
 use alloc::vec;
 
 // ── Generated LittleFS config from build.rs ─────────────────────────────
+// NOTE: Your build.rs should still generate the geometry constants
+// (BLOCK_SIZE, BLOCK_COUNT, TOTAL_SIZE, etc.) but no longer needs to
+// embed the IMAGE bytes via include_bytes!().
 
 #[allow(unused)]
 pub mod lfs_config {
     include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
 }
+
+// ── Flash partition where the LittleFS image lives ──────────────────────
+// Must match the offset and size in partitions.csv
+const LITTLEFS_PARTITION_OFFSET: u32 = 0x20_0000; // 4 MB into flash
 
 // ── RAM-backed Storage impl ─────────────────────────────────────────────
 // Instantiated from the generated littlefs constants
@@ -44,19 +53,48 @@ impl Storage for RamStorage<'_> {
 
 // ── File system mounter ─────────────────────────────
 
-pub fn mount_fs() {
-    // Allocate in PSRAM and copy the image in
+/// Reads the LittleFS image from flash into PSRAM, then mounts it.
+///
+/// Requires `esp_storage` in Cargo.toml:
+///   esp-storage = { version = "0.4", features = ["esp32s3"] }
+pub fn mount_fs(flash: esp_hal::peripherals::FLASH) {
+    // Allocate the full filesystem buffer in PSRAM
     let mut storage_buf = vec![0u8; lfs_config::TOTAL_SIZE];
-    storage_buf[..lfs_config::IMAGE.len()].copy_from_slice(lfs_config::IMAGE);
 
-    // Create an instance of the RamStorage and copy the image in
+    // Read the LittleFS image from the flash partition into PSRAM
+    let mut flash_storage = esp_storage::FlashStorage::new(flash);
+
+    // Read in 4 KiB chunks (sector-aligned) to stay within read limits
+    const CHUNK: usize = 4096;
+    let total = lfs_config::TOTAL_SIZE;
+    let mut offset: usize = 0;
+
+    info!(
+        "Reading {} bytes of LittleFS image from flash @ {:#X}...",
+        total, LITTLEFS_PARTITION_OFFSET
+    );
+
+    while offset < total {
+        let end = (offset + CHUNK).min(total);
+        flash_storage
+            .read(
+                LITTLEFS_PARTITION_OFFSET + offset as u32,
+                &mut storage_buf[offset..end],
+            )
+            .expect("Flash read failed");
+        offset = end;
+    }
+
+    info!("Flash read complete, mounting filesystem...");
+
+    // Create an instance of the RamStorage backed by the PSRAM buffer
     let mut storage = RamStorage {
         buf: &mut storage_buf,
     };
 
     let mut alloc = Filesystem::allocate();
 
-    // Mount the actual
+    // Mount the filesystem
     match Filesystem::mount(&mut alloc, &mut storage) {
         Ok(_fs) => {
             println!("Mounted!");

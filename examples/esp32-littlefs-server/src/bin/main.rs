@@ -44,7 +44,7 @@ async fn main(spawner: Spawner) -> ! {
     // Add PSRAM as heap region
     esp_alloc::psram_allocator!(&peripherals.PSRAM, esp_hal::psram);
 
-    lib::fs::mount_fs();
+    lib::fs::mount_fs(peripherals.FLASH);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0);
