@@ -38,8 +38,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 72 * 1024);
     esp_alloc::psram_allocator!(&peripherals.PSRAM, esp_hal::psram);
 
-    let file_server = lib::fs::mount_fs(peripherals.FLASH);
-
+    // Start WiFi FIRST — it needs internal SRAM heap for task stacks
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0);
 
@@ -50,10 +49,21 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller")
     );
     let rng = Rng::new();
-
     let stack = lib::wifi::start_wifi(radio_init, peripherals.WIFI, rng, &spawner).await;
+    info!("WiFi started!");
 
-    let web_app = lib::web::WebApp::new(file_server);
+    Timer::after(Duration::from_secs(2)).await;
+
+    // Mount filesystem — just mounts the LittleFS partition, no files
+    // are read yet. Files are read on-demand per HTTP request.
+    lib::fs::mount_fs(peripherals.FLASH);
+
+    Timer::after(Duration::from_secs(2)).await;
+
+    // Start web server — no upfront file loading, no PSRAM leaks.
+    // Each request reads from flash into a temporary buffer, serves
+    // it, then frees the buffer.
+    let web_app = lib::web::WebApp::default();
     for id in 0..lib::web::WEB_TASK_POOL_SIZE {
         spawner.must_spawn(lib::web::web_task(
             id,
@@ -62,6 +72,7 @@ async fn main(spawner: Spawner) -> ! {
             web_app.config,
         ));
     }
+    info!("Web server running!");
 
     loop {
         Timer::after(Duration::from_secs(1)).await;

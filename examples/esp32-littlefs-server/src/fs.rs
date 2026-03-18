@@ -1,10 +1,12 @@
+use core::cell::RefCell;
+use critical_section::Mutex;
 use defmt::info;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use esp_println::{self as _, println};
 use littlefs2::{driver::Storage, fs::Filesystem, io::Result as LfsResult};
 
 extern crate alloc;
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use alloc::vec::Vec;
 
 // ── Generated LittleFS config from build.rs ─────────────────────────────
 
@@ -16,7 +18,7 @@ pub mod lfs_config {
 
 // ── Flash-backed Storage impl ───────────────────────────────────────────
 
-struct FlashLfsStorage<'a> {
+pub struct FlashLfsStorage<'a> {
     flash: esp_storage::FlashStorage<'a>,
     offset: u32,
 }
@@ -63,9 +65,6 @@ impl Storage for FlashLfsStorage<'_> {
 }
 
 // ── Path helper ─────────────────────────────────────────────────────────
-// littlefs2::path::Path is repr(transparent) over null-terminated bytes
-// and only implements TryFrom for fixed-size byte arrays, not &str.
-// We construct null-terminated bytes and transmute.
 
 fn make_null_terminated(s: &str) -> Vec<u8> {
     let mut v = Vec::with_capacity(s.len() + 1);
@@ -74,81 +73,12 @@ fn make_null_terminated(s: &str) -> Vec<u8> {
     v
 }
 
-/// Convert a null-terminated byte slice to a littlefs2 Path.
-///
-/// # Safety
-/// `bytes` must be a valid null-terminated byte sequence with no
-/// interior null bytes. This matches Path's internal representation.
 unsafe fn bytes_as_path(bytes: &[u8]) -> &littlefs2::path::Path {
     unsafe { &*(bytes as *const [u8] as *const littlefs2::path::Path) }
 }
 
-// ── Static file server ──────────────────────────────────────────────────
+// ── Named helper for reading file contents ──────────────────────────────
 
-pub struct FileServer {
-    files: BTreeMap<&'static str, &'static [u8]>,
-}
-
-impl FileServer {
-    pub fn get(&self, path: &str) -> Option<&'static [u8]> {
-        self.files.get(path).copied()
-    }
-
-    pub fn get_str(&self, path: &str) -> Option<&'static str> {
-        self.get(path)
-            .map(|bytes| core::str::from_utf8(bytes).expect("file is not valid UTF-8"))
-    }
-
-    pub fn content_type(path: &str) -> &'static str {
-        match path.rsplit('.').next() {
-            Some("html") => "text/html; charset=utf-8",
-            Some("css") => "text/css; charset=utf-8",
-            Some("js") => "application/javascript; charset=utf-8",
-            Some("json") => "application/json; charset=utf-8",
-            Some("png") => "image/png",
-            Some("jpg" | "jpeg") => "image/jpeg",
-            Some("gif") => "image/gif",
-            Some("svg") => "image/svg+xml",
-            Some("ico") => "image/x-icon",
-            Some("woff") => "font/woff",
-            Some("woff2") => "font/woff2",
-            Some("ttf") => "font/ttf",
-            Some("wasm") => "application/wasm",
-            _ => "application/octet-stream",
-        }
-    }
-}
-
-// ── Named helper functions (avoids HRTB closure issues) ─────────────────
-
-/// Collect directory entries as (name, is_dir) pairs.
-/// Using a named function instead of a closure fixes the higher-ranked
-/// lifetime bounds that littlefs2's `read_dir_and_then` requires.
-fn collect_dir_entries<S: Storage>(
-    iter: &mut littlefs2::fs::ReadDir<'_, '_, S>,
-) -> LfsResult<Vec<(String, bool)>> {
-    let mut entries = Vec::new();
-    for entry in iter {
-        let entry: littlefs2::fs::DirEntry = entry?;
-        let name = entry.file_name();
-
-        // Convert Path -> bytes -> str (strip trailing null if present)
-        let name_bytes = name.as_str().as_bytes(); // Path derefs to [u8]
-        let name_str = core::str::from_utf8(name_bytes)
-            .expect("filename is not valid UTF-8")
-            .trim_end_matches('\0');
-
-        if name_str == "." || name_str == ".." {
-            continue;
-        }
-
-        let is_dir = entry.file_type().is_dir();
-        entries.push((String::from(name_str), is_dir));
-    }
-    Ok(entries)
-}
-
-/// Read a file's full contents into a Vec.
 fn read_file_contents<S: Storage>(file: &littlefs2::fs::File<'_, '_, S>) -> LfsResult<Vec<u8>> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 512];
@@ -162,91 +92,115 @@ fn read_file_contents<S: Storage>(file: &littlefs2::fs::File<'_, '_, S>) -> LfsR
     Ok(buf)
 }
 
-// ── Directory walker (iterative, not recursive in closures) ─────────────
+// ── Global mounted filesystem ───────────────────────────────────────────
 
-fn walk_all_files<S: Storage>(fs: &Filesystem<S>) -> Vec<String> {
-    let mut file_paths = Vec::new();
-    // Stack of directories to visit
-    let mut dir_stack: Vec<String> = Vec::new();
-    dir_stack.push(String::from("/"));
+static MOUNTED: Mutex<RefCell<bool>> = Mutex::new(RefCell::new(false));
+static mut FS_PTR: Option<*mut ()> = None;
 
-    while let Some(dir_path) = dir_stack.pop() {
-        let path_bytes = make_null_terminated(&dir_path);
-        let lfs_path = unsafe { bytes_as_path(&path_bytes) };
-
-        let entries = fs
-            .read_dir_and_then(lfs_path, &mut collect_dir_entries::<S>)
-            .unwrap_or_default();
-
-        for (name, is_dir) in entries {
-            let full_path = if dir_path == "/" {
-                alloc::format!("/{}", name)
-            } else {
-                alloc::format!("{}/{}", dir_path, name)
-            };
-
-            if is_dir {
-                dir_stack.push(full_path);
-            } else {
-                file_paths.push(full_path);
-            }
-        }
-    }
-
-    file_paths
-}
-
-// ── File system mounter ─────────────────────────────────────────────────
-
-pub fn mount_fs(flash: esp_hal::peripherals::FLASH) -> &'static FileServer {
-    let mut storage = FlashLfsStorage::new(flash, lfs_config::PARTITION_OFFSET);
-    let mut alloc = Filesystem::allocate();
-
+/// Mount the LittleFS filesystem. Call once at startup.
+/// No files are loaded — zero heap cost.
+pub fn mount_fs(flash: esp_hal::peripherals::FLASH) {
     info!(
         "Mounting LittleFS from flash @ {:#X}...",
-        lfs_config::PARTITION_OFFSET
+        lfs_config::PARTITION_OFFSET,
     );
 
-    match Filesystem::mount(&mut alloc, &mut storage) {
+    // Extend the FLASH peripheral lifetime to 'static.
+    // Safety: we leak the storage below so it lives forever,
+    // and the FLASH peripheral is never used elsewhere.
+    let flash: esp_hal::peripherals::FLASH<'static> = unsafe { core::mem::transmute(flash) };
+
+    let storage = alloc::boxed::Box::leak(alloc::boxed::Box::new(FlashLfsStorage::new(
+        flash,
+        lfs_config::PARTITION_OFFSET,
+    )));
+    let alloc = alloc::boxed::Box::leak(alloc::boxed::Box::new(Filesystem::allocate()));
+
+    match Filesystem::mount(alloc, storage) {
         Ok(fs) => {
             println!("Mounted!");
-
-            // Walk the entire filesystem (iterative, avoids HRTB issues)
-            let file_paths = walk_all_files(&fs);
-
-            info!("Found {} files in filesystem", file_paths.len());
-
-            // Read each file's contents from flash and leak into 'static
-            let mut files = BTreeMap::new();
-            for path_string in file_paths {
-                let path_bytes = make_null_terminated(&path_string);
-                let lfs_path = unsafe { bytes_as_path(&path_bytes) };
-
-                let result =
-                    fs.open_file_and_then(lfs_path, &mut read_file_contents::<FlashLfsStorage>);
-
-                match result {
-                    Ok(data) => {
-                        let size = data.len();
-                        let static_path: &'static str = Box::leak(path_string.into_boxed_str());
-                        let static_data: &'static [u8] = Box::leak(data.into_boxed_slice());
-                        files.insert(static_path, static_data);
-                        info!("  {} ({} bytes)", static_path, size);
-                    }
-                    Err(e) => {
-                        println!("  Failed to read {}: {:?}", path_string, e);
-                    }
-                }
+            let fs_leaked = alloc::boxed::Box::leak(alloc::boxed::Box::new(fs));
+            unsafe {
+                FS_PTR = Some(fs_leaked as *mut _ as *mut ());
             }
-
-            // fs, alloc, storage all dropped here — flash is released,
-            // only the extracted file contents remain in PSRAM.
-            let server = Box::leak(Box::new(FileServer { files }));
-            info!("FileServer ready with {} files", server.files.len());
-            server
+            critical_section::with(|cs| {
+                *MOUNTED.borrow_ref_mut(cs) = true;
+            });
+            info!("LittleFS mounted, ready for on-demand reads");
         }
         Err(e) => {
             panic!("Mount failed: {:?}", e);
         }
+    }
+}
+
+/// Read a file from the mounted filesystem on-demand.
+/// Returns None if the file doesn't exist or FS isn't mounted.
+///
+/// The returned Vec lives on the heap (internal SRAM by default for
+/// small allocations). It is TEMPORARY — the caller should drop it
+/// after writing the response, so the memory is reclaimed.
+pub fn read_file(path: &str) -> Option<Vec<u8>> {
+    let is_mounted = critical_section::with(|cs| *MOUNTED.borrow_ref(cs));
+    if !is_mounted {
+        return None;
+    }
+
+    let path_bytes = make_null_terminated(path);
+    let lfs_path = unsafe { bytes_as_path(&path_bytes) };
+
+    let fs: &Filesystem<'_, FlashLfsStorage<'_>> =
+        unsafe { &*(FS_PTR.unwrap() as *const Filesystem<'_, FlashLfsStorage<'_>>) };
+
+    match fs.open_file_and_then(lfs_path, &mut read_file_contents::<FlashLfsStorage>) {
+        Ok(data) => Some(data),
+        Err(_) => None,
+    }
+}
+
+/// Build a LittleFS path from a URL path segment.
+/// Normalizes: strips leading slash, defaults "" to "index.html",
+/// then prepends "/" for LittleFS.
+///
+/// Returns None if the path looks suspicious (e.g. contains "..").
+pub fn normalize_url_path(url_path: &str) -> Option<Vec<u8>> {
+    let trimmed = url_path.trim_start_matches('/');
+
+    // Basic path traversal protection
+    if trimmed.contains("..") {
+        return None;
+    }
+
+    let file_path = if trimmed.is_empty() {
+        "index.html"
+    } else {
+        trimmed
+    };
+
+    // LittleFS paths start with "/"
+    let mut full = Vec::with_capacity(1 + file_path.len());
+    full.push(b'/');
+    full.extend_from_slice(file_path.as_bytes());
+
+    Some(full)
+}
+
+/// Guess a Content-Type from the file extension.
+pub fn content_type(path: &str) -> &'static str {
+    match path.rsplit('.').next() {
+        Some("html") => "text/html; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("js") => "application/javascript; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("svg") => "image/svg+xml",
+        Some("ico") => "image/x-icon",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+        Some("ttf") => "font/ttf",
+        Some("wasm") => "application/wasm",
+        _ => "application/octet-stream",
     }
 }

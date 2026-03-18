@@ -50,7 +50,7 @@ pub async fn start_wifi(
     let (stack, runner) = embassy_net::new(
         wifi_interface,
         net_config,
-        mk_static!(StackResources<3>, StackResources::<3>::new()),
+        mk_static!(StackResources<6>, StackResources::<6>::new()),
         net_seed,
     );
 
@@ -95,6 +95,7 @@ async fn connection(mut controller: WifiController<'static>) {
             _ => {}
         }
         if !matches!(controller.is_started(), Ok(true)) {
+            println!("SSID: '{}', PASSWORD: '{}'", SSID, PASSWORD);
             let client_config = ModeConfig::AccessPoint(
                 AccessPointConfig::default()
                     .with_ssid(SSID.into())
