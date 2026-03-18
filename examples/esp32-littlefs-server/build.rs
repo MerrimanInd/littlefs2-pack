@@ -2,7 +2,11 @@ use littlefs2_pack;
 use std::path::Path;
 
 fn main() {
-    littlefs2_pack::generate(&Path::new("./littlefs.toml"));
+    // Generate the littlefs2 config module from the TOML
+    littlefs2_pack::pack_and_generate_config(&Path::new("./littlefs.toml"));
+
+    // Generate the littlefs2 partition module from the partitions.csv
+    littlefs2_pack::generate_esp_partitions_config(&Path::new("./partitions.csv"), "littlefs");
 
     linker_be_nice();
     println!("cargo:rustc-link-arg=-Tdefmt.x");

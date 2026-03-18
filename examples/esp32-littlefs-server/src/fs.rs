@@ -11,10 +11,8 @@ use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 #[allow(unused)]
 pub mod lfs_config {
     include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
+    include!(concat!(env!("OUT_DIR"), "/partition_config.rs"));
 }
-
-// ── Flash partition where the LittleFS image lives ──────────────────────
-const LITTLEFS_PARTITION_OFFSET: u32 = 0x20_0000; // 2 MB into flash
 
 // ── Flash-backed Storage impl ───────────────────────────────────────────
 
@@ -201,12 +199,12 @@ fn walk_all_files<S: Storage>(fs: &Filesystem<S>) -> Vec<String> {
 // ── File system mounter ─────────────────────────────────────────────────
 
 pub fn mount_fs(flash: esp_hal::peripherals::FLASH) -> &'static FileServer {
-    let mut storage = FlashLfsStorage::new(flash, LITTLEFS_PARTITION_OFFSET);
+    let mut storage = FlashLfsStorage::new(flash, lfs_config::PARTITION_OFFSET);
     let mut alloc = Filesystem::allocate();
 
     info!(
         "Mounting LittleFS from flash @ {:#X}...",
-        LITTLEFS_PARTITION_OFFSET
+        lfs_config::PARTITION_OFFSET
     );
 
     match Filesystem::mount(&mut alloc, &mut storage) {

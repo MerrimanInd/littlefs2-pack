@@ -2,7 +2,7 @@ use littlefs2_pack;
 use std::path::Path;
 
 fn main() {
-    littlefs2_pack::generate(&Path::new("./littlefs.toml"));
+    littlefs2_pack::pack_and_generate_config(&Path::new("./littlefs.toml"));
 
     linker_be_nice();
     println!("cargo:rustc-link-arg=-Tdefmt.x");

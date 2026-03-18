@@ -51,14 +51,53 @@ use crate::{
     config::Config,
     littlefs::LfsImage,
     pack::{PackedPaths, pack_directory},
+    partition_table::get_partition,
 };
 
 pub mod config;
 pub mod littlefs;
 pub mod pack;
+pub mod partition_table;
 
-/// Generate a LittleFS image from the LittleFS.toml
-pub fn generate(littlefs_config: &Path) {
+/// Generate a LittleFS image and Rust configuration module from a
+/// `littlefs.toml` file.
+///
+/// Reads the TOML configuration at `littlefs_config`, packs the
+/// directory tree it references into a LittleFS binary image, and
+/// writes two files into `$OUT_DIR`:
+///
+/// - **`filesystem.bin`** — the raw LittleFS image ready to be
+///   flashed to the device.
+/// - **`littlefs_config.rs`** — Rust constants for the image geometry
+///   (`BLOCK_SIZE`, `BLOCK_COUNT`, `TOTAL_SIZE`, etc.), typenum
+///   aliases, an `IMAGE` static that embeds the binary via
+///   `include_bytes!`, and an optional `paths` module mirroring the
+///   packed directory layout.
+///
+/// # Usage in `build.rs`
+///
+/// ```rust,no_run
+/// littlefs2_pack::generate(
+///     std::path::Path::new("littlefs.toml"),
+/// );
+/// ```
+///
+/// Then in your firmware crate:
+///
+/// ```rust,ignore
+/// mod littlefs {
+///     include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
+/// }
+/// ```
+///
+/// # Panics
+///
+/// Panics if the `OUT_DIR` environment variable is not set (i.e. this
+/// function is called outside of a Cargo build script), or if any step
+/// of config parsing, image creation, packing, or file I/O fails. This
+/// panic behavior is because a build should not proceed if this step
+/// doesn't succeed.
+pub fn pack_and_generate_config(littlefs_config: &Path) {
     let image_name = String::from("filesystem");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let img_file_path = format!("{}/{}.bin", out_dir, image_name);
@@ -91,4 +130,40 @@ pub fn generate(littlefs_config: &Path) {
     let binary = image.into_data();
 
     std::fs::write(img_file_path, &binary).unwrap();
+}
+
+/// Generate a Rust module with partition offset and size constants
+/// from an ESP-IDF partition table CSV.
+///
+/// Reads the CSV at `partition_csv`, looks up the partition named
+/// `partition_name`, and writes a `partition_config.rs` file into
+/// `$OUT_DIR` containing:
+///
+/// ```text
+/// pub const PARTITION_NAME: &str = "littlefs";
+/// pub const PARTITION_OFFSET: u32 = 0x200000;
+/// pub const PARTITION_SIZE: u32 = 0xE00000;
+/// ```
+///
+/// # Usage in `build.rs`
+///
+/// ```rust,no_run
+/// littlefs2_pack::partition_generate(
+///     std::path::Path::new("partitions.csv"),
+///     "littlefs",
+/// );
+/// ```
+///
+/// Then in your firmware crate:
+///
+/// ```rust,ignore
+/// mod partition {
+///     include!(concat!(env!("OUT_DIR"), "/partition_config.rs"));
+/// }
+/// ```
+pub fn generate_esp_partitions_config(partition_csv: &Path, partition_name: &str) {
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+
+    let partition = get_partition(partition_csv, partition_name).unwrap();
+    partition.emit_rust(Path::new(&out_dir)).unwrap();
 }
