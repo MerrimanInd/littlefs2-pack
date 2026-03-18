@@ -2,21 +2,31 @@ use embassy_net::Stack;
 use embassy_time::Duration;
 use esp_alloc as _;
 use picoserve::{AppBuilder, AppRouter, Router, response::File, routing};
-use crate::fs::lfs_config;
+
+use crate::fs::FileServer;
 
 // ── Web Application ─────────────────────────────
 
-pub struct Application;
+pub struct Application {
+    pub file_server: &'static FileServer,
+}
 
 impl AppBuilder for Application {
     type PathRouter = impl routing::PathRouter;
 
     fn build_app(self) -> picoserve::Router<Self::PathRouter> {
-        picoserve::Router::new().route(
-            "/",
-            // routing::get_service(File::html(include_str!("index.html"))),
-            routing::get_service(File::html(lfs_config::paths::INDEX_HTML)),
-        )
+        let fs = self.file_server;
+
+        let index = fs.get_str("/index.html").expect("missing /index.html");
+
+        picoserve::Router::new().route("/", routing::get_service(File::html(index)))
+        // ── Add routes for your other files here ──────────────
+        // .route("/style.css", routing::get_service(
+        //     File::css(fs.get_str("/style.css").unwrap())
+        // ))
+        // .route("/app.js", routing::get_service(
+        //     File::javascript(fs.get_str("/js/app.js").unwrap())
+        // ))
     }
 }
 
@@ -27,9 +37,10 @@ pub struct WebApp {
     pub config: &'static picoserve::Config,
 }
 
-impl Default for WebApp {
-    fn default() -> Self {
-        let router = picoserve::make_static!(AppRouter<Application>, Application.build_app());
+impl WebApp {
+    pub fn new(file_server: &'static FileServer) -> Self {
+        let app = Application { file_server };
+        let router = picoserve::make_static!(AppRouter<Application>, app.build_app());
 
         let config = picoserve::make_static!(
             picoserve::Config,

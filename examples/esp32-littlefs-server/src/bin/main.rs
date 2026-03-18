@@ -24,8 +24,6 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 
 extern crate alloc;
 
-// This creates a default app-descriptor required by the esp-idf bootloader.
-// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[allow(
@@ -34,17 +32,13 @@ esp_bootloader_esp_idf::esp_app_desc!();
 )]
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
-    // generator version: 1.2.0
-
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    // Set up internal SRAM heap — enables `alloc` crate
     esp_alloc::heap_allocator!(size: 72 * 1024);
-    // Add PSRAM as heap region
     esp_alloc::psram_allocator!(&peripherals.PSRAM, esp_hal::psram);
 
-    lib::fs::mount_fs(peripherals.FLASH);
+    let file_server = lib::fs::mount_fs(peripherals.FLASH);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0);
@@ -59,7 +53,7 @@ async fn main(spawner: Spawner) -> ! {
 
     let stack = lib::wifi::start_wifi(radio_init, peripherals.WIFI, rng, &spawner).await;
 
-    let web_app = lib::web::WebApp::default();
+    let web_app = lib::web::WebApp::new(file_server);
     for id in 0..lib::web::WEB_TASK_POOL_SIZE {
         spawner.must_spawn(lib::web::web_task(
             id,
@@ -72,6 +66,4 @@ async fn main(spawner: Spawner) -> ! {
     loop {
         Timer::after(Duration::from_secs(1)).await;
     }
-
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0/examples
 }
