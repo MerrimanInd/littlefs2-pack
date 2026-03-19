@@ -2,10 +2,6 @@
 # runner = "espflash flash --monitor --chip esp32s3 --log-format defmt"
 runner = "espflash flash --partition-table partitions.csv --flash-size 16mb"
 
-# esptool --chip esp32s3 --port /dev/ttyACM0 \
-#   write_flash 0x200000 \
-#   ../../target/xtensa-esp32s3-none-elf/release/build/esp32-littlefs-server-e2ca65db453fd1fa/out/filesystem.bin --flash-size 16MB
-
 [env]
 DEFMT_LOG = "info"
 ESP_HAL_CONFIG_PSRAM_MODE = "quad"

@@ -11,3 +11,6 @@ target
 
 # Nix build output
 result
+
+**/.cargo/*
+!**/.cargo/config.toml
