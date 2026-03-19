@@ -23,13 +23,15 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Pack a directory into a LittleFS2 image
-    Pack(Pack),
+    Pack(PackCmd),
     /// Unpack a LittleFS2 image into a directory
-    Unpack(Unpack),
+    Unpack(UnpackCmd),
     /// List files in a LittleFS2 image
     List(ListCmd),
     /// Print info about a LittleFS2 image (block count, used space, etc.)
     Info(InfoCmd),
+    /// Run the flash commands from a TOML config file
+    Flash(FlashCmd),
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +241,7 @@ fn image_config_for_reading(
 // ---------------------------------------------------------------------------
 
 #[derive(Args)]
-pub struct Pack {
+pub struct PackCmd {
     /// Source directory to pack (overrides TOML [directory] root)
     #[arg(short = 'd', long)]
     pub pack_directory: Option<PathBuf>,
@@ -253,7 +255,7 @@ pub struct Pack {
 }
 
 #[derive(Args)]
-pub struct Unpack {
+pub struct UnpackCmd {
     /// LittleFS2 image file to unpack
     #[arg(short, long)]
     pub image: PathBuf,
@@ -286,6 +288,13 @@ pub struct InfoCmd {
     pub fs: ImageConfigParams,
 }
 
+#[derive(Args)]
+pub struct FlashCmd {
+    // The binary to flash to the device
+    #[arg(value_name = "BINARY")]
+    pub binary_path: Option<PathBuf>,
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -298,6 +307,7 @@ fn main() -> Result<()> {
         Commands::Unpack(args) => cmd_unpack(&cli.config, args)?,
         Commands::List(args) => cmd_list(&cli.config, args)?,
         Commands::Info(args) => cmd_info(&cli.config, args)?,
+        Commands::Flash(args) => cmd_flash(&cli.config, args)?,
     }
 
     Ok(())
@@ -307,7 +317,7 @@ fn main() -> Result<()> {
 // pack
 // ---------------------------------------------------------------------------
 
-fn cmd_pack(config_path: &Option<PathBuf>, args: Pack) -> Result<()> {
+fn cmd_pack(config_path: &Option<PathBuf>, args: PackCmd) -> Result<()> {
     // Resolve everything from TOML + CLI overrides
     let (image_config, root, directory_config) = match config_path {
         Some(path) => {
@@ -404,7 +414,7 @@ fn pack_directory_simple(
 // unpack
 // ---------------------------------------------------------------------------
 
-fn cmd_unpack(config_path: &Option<PathBuf>, args: Unpack) -> Result<()> {
+fn cmd_unpack(config_path: &Option<PathBuf>, args: UnpackCmd) -> Result<()> {
     let data = std::fs::read(&args.image)
         .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
     let config = image_config_for_reading(config_path, &args.fs, &data)?;
@@ -518,6 +528,69 @@ fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
         Ok(())
     })?;
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// flash
+// ---------------------------------------------------------------------------
+
+fn cmd_flash(config_path: &Option<PathBuf>, args: FlashCmd) -> Result<()> {
+    // Load the config
+    let config_path = config_path
+        .as_ref()
+        .context("no project config file path handed in!")?;
+
+    let config = Config::from_file(config_path).context("failed to load config file")?;
+    let flash_config = config
+        .flash
+        .context("project config file must have [flash] section defined!")?;
+
+    let path = args
+        .binary_path
+        .or(flash_config.firmware.path)
+        .context("no firmware path (pass as argument or set path in [flash.firmware])")?;
+
+    // Run the flash command
+    run_command(
+        &flash_config.firmware.command,
+        &[("path", path.to_str().context("invalid binary file path")?)],
+    )
+    .context("failed to flash binary")?;
+
+    // Write the binary
+    run_command(
+        &flash_config.filesystem.command,
+        &[
+            ("path", "todo path"),
+            ("address", flash_config.filesystem.address.as_str()),
+        ],
+    )
+    .context("failed to write filesystem binary")?;
+
+    // Optionally enter monitoring
+    if let Some(monitor) = &flash_config.monitor {
+        run_command(&monitor.command, &[]).context("failed to enter monitoring")?;
+    };
+
+    Ok(())
+}
+
+fn run_command(template: &str, vars: &[(&str, &str)]) -> Result<()> {
+    let mut expanded = template.to_string();
+    for (key, value) in vars {
+        expanded = expanded.replace(&format!("{{{key}}}"), value);
+    }
+
+    let parts: Vec<&str> = expanded.split_whitespace().collect();
+    let (program, args) = parts.split_first().context("empty command")?;
+
+    let status = std::process::Command::new(program)
+        .args(args)
+        .status()
+        .with_context(|| format!("failed to run: {program}"))?;
+
+    anyhow::ensure!(status.success(), "{program} exited with {status}");
     Ok(())
 }
 

@@ -77,7 +77,7 @@ pub mod partition_table;
 /// # Usage in `build.rs`
 ///
 /// ```rust,no_run
-/// littlefs2_pack::generate(
+/// littlefs2_pack::pack_and_generate_config(
 ///     std::path::Path::new("littlefs.toml"),
 /// );
 /// ```
@@ -148,7 +148,7 @@ pub fn pack_and_generate_config(littlefs_config: &Path) {
 /// # Usage in `build.rs`
 ///
 /// ```rust,no_run
-/// littlefs2_pack::partition_generate(
+/// littlefs2_pack::generate_esp_partitions_config(
 ///     std::path::Path::new("partitions.csv"),
 ///     "littlefs",
 /// );

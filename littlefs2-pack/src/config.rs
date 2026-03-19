@@ -111,6 +111,25 @@ pub enum ConfigError {
         #[source]
         source: std::io::Error,
     },
+
+    /// Both `address` and `partition_table`/`partition_name` were specified
+    /// in `[flash.filesystem]`. Only one addressing method is allowed.
+    #[error("specify either address or partition_table/partition_name, not both")]
+    BothAddressMethods,
+
+    /// Neither `address` nor `partition_table`/`partition_name` was specified
+    /// in `[flash.filesystem]`.
+    #[error("specify either address or partition_table/partition_name in [flash.filesystem]")]
+    NoAddressMethod,
+
+    /// Only one of `partition_table` or `partition_name` was specified.
+    /// Both are required when using partition-table addressing.
+    #[error("both partition_table and partition_name must be specified together")]
+    IncompletePartitionConfig,
+
+    /// Failed to resolve the flash address from the partition table.
+    #[error("failed to read partition table")]
+    PartitionTable(#[from] crate::partition_table::PartitionError),
 }
 
 /// Raw top-level configuration as deserialized from a TOML file.
@@ -122,6 +141,7 @@ pub enum ConfigError {
 pub struct RawConfig {
     image: RawImageConfig,
     directory: RawDirectoryConfig,
+    flash: Option<RawFlashConfig>,
 }
 
 /// A fully validated and resolved configuration.
@@ -132,6 +152,7 @@ pub struct RawConfig {
 pub struct Config {
     pub image: ImageConfig,
     pub directory: DirectoryConfig,
+    pub flash: Option<FlashConfig>,
     base_dir: PathBuf,
 }
 
@@ -155,10 +176,12 @@ impl Config {
 
         let image = raw.image.resolve()?;
         let directory = raw.directory.resolve(&base_dir)?;
+        let flash = raw.flash.map(|f| f.resolve(&base_dir)).transpose()?;
 
         Ok(Config {
             image,
             directory,
+            flash,
             base_dir,
         })
     }
@@ -434,6 +457,124 @@ impl ImageConfig {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+struct RawFlashConfig {
+    firmware: RawFirmwareFlash,
+    filesystem: RawFilesystemFlash,
+    monitor: Option<MonitorFlash>,
+}
+
+impl RawFlashConfig {
+    pub fn resolve(self, base_dir: &Path) -> Result<FlashConfig, ConfigError> {
+        Ok(FlashConfig {
+            firmware: self.firmware.resolve(base_dir)?,
+            filesystem: self.filesystem.resolve(base_dir)?,
+            monitor: self.monitor,
+        })
+    }
+}
+
+/// Fully resolved flash configuration.
+#[derive(Debug)]
+pub struct FlashConfig {
+    pub firmware: FirmwareFlash,
+    pub filesystem: FilesystemFlash,
+    pub monitor: Option<MonitorFlash>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawFirmwareFlash {
+    /// The command template. `{path}` is replaced with the ELF path.
+    pub command: String,
+    /// Optional hardcoded path to the firmware binary, used as a fallback
+    /// when no path argument is passed in by `cargo run`.
+    pub path: Option<String>,
+}
+
+impl RawFirmwareFlash {
+    fn resolve(self, base_dir: &Path) -> Result<FirmwareFlash, ConfigError> {
+        Ok(FirmwareFlash {
+            command: self.command,
+            path: self.path.map(|p| base_dir.join(p)),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct FirmwareFlash {
+    pub command: String,
+    pub path: Option<PathBuf>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+struct RawFilesystemFlash {
+    command: String,
+    path: Option<String>,
+    address: Option<String>,
+    partition_table: Option<String>,
+    partition_name: Option<String>,
+}
+
+impl RawFilesystemFlash {
+    pub fn resolve(self, base_dir: &Path) -> Result<FilesystemFlash, ConfigError> {
+        let has_address = self.address.is_some();
+        let has_table = self.partition_table.is_some();
+        let has_name = self.partition_name.is_some();
+
+        // partition_table and partition_name must both be present or both absent
+        if has_table != has_name {
+            return Err(ConfigError::IncompletePartitionConfig);
+        }
+
+        let address = match (has_address, has_table) {
+            // Both addressing methods specified
+            (true, true) => return Err(ConfigError::BothAddressMethods),
+            // Neither specified
+            (false, false) => return Err(ConfigError::NoAddressMethod),
+            // Direct address
+            (true, false) => self.address.unwrap(),
+            // Resolve from partition table
+            (false, true) => {
+                let csv_path = base_dir.join(self.partition_table.as_ref().unwrap());
+                let partition = crate::partition_table::get_partition(
+                    &csv_path,
+                    self.partition_name.as_ref().unwrap(),
+                )?;
+                format!("{:#x}", partition.offset)
+            }
+        };
+
+        Ok(FilesystemFlash {
+            command: self.command,
+            path: self.path.map(|p| base_dir.join(p)),
+            address,
+        })
+    }
+}
+
+/// Resolved filesystem flash configuration with a concrete address.
+#[derive(Debug)]
+pub struct FilesystemFlash {
+    /// The command template. `{path}` and `{address}` are replaced at execution time.
+    pub command: String,
+    /// Optional path to the filesystem image. If omitted, the image name
+    /// and `OUT_DIR` environment variable are used to construct one.
+    pub path: Option<PathBuf>,
+    /// The resolved flash address (either from `address` directly or
+    /// looked up from the partition table).
+    pub address: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MonitorFlash {
+    /// The monitor/attach command to run after flashing.
+    pub command: String,
+}
+
 // ---------------------------------------------------------------------------
 // Path-module generation helpers
 // ---------------------------------------------------------------------------
@@ -690,9 +831,11 @@ mod tests {
         let base_dir = PathBuf::from(".");
         let image = raw.image.resolve()?;
         let directory = raw.directory.resolve(&base_dir)?;
+        let flash = raw.flash.map(|f| f.resolve(&base_dir)).transpose()?;
         Ok(Config {
             image,
             directory,
+            flash,
             base_dir,
         })
     }
@@ -1287,5 +1430,187 @@ surprise = true
 "#;
         let err = parse_and_validate(toml).unwrap_err();
         assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Flash config: validation
+    // -------------------------------------------------------------------------
+
+    /// Helper: wraps a `[flash.*]` section with a valid image+directory preamble.
+    fn flash_toml(flash_section: &str) -> String {
+        format!(
+            r#"
+[image]
+block_size = 4096
+block_count = 128
+page_size = 256
+
+[directory]
+root = "."
+depth = -1
+ignore_hidden = true
+gitignore = false
+repo_gitignore = false
+glob_ignores = []
+glob_includes = []
+
+{flash_section}
+"#
+        )
+    }
+
+    #[test]
+    fn flash_with_direct_address() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "probe-rs run {path}"
+
+[flash.filesystem]
+command = "probe-rs download --base-address {address} {path}"
+address = "0x08060000"
+"#,
+        );
+        let config = parse_and_validate(&toml).unwrap();
+        let flash = config.flash.unwrap();
+        assert_eq!(flash.filesystem.address, "0x08060000");
+        assert!(flash.filesystem.path.is_none());
+        assert!(flash.monitor.is_none());
+    }
+
+    #[test]
+    fn flash_with_firmware_path_fallback() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "espflash flash {path}"
+path = "/path/to/binary"
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+path = "build/littlefs.bin"
+address = "0x200000"
+"#,
+        );
+        let config = parse_and_validate(&toml).unwrap();
+        let flash = config.flash.unwrap();
+        assert_eq!(
+            flash.firmware.path.as_deref(),
+            Some(Path::new("/path/to/binary"))
+        );
+        assert_eq!(
+            flash.filesystem.path.as_deref(),
+            Some(Path::new("build/littlefs.bin"))
+        );
+    }
+
+    #[test]
+    fn flash_with_monitor() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "espflash flash {path}"
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+address = "0x200000"
+
+[flash.monitor]
+command = "espflash monitor --after hard-reset"
+"#,
+        );
+        let config = parse_and_validate(&toml).unwrap();
+        let flash = config.flash.unwrap();
+        let monitor = flash.monitor.unwrap();
+        assert_eq!(monitor.command, "espflash monitor --after hard-reset");
+    }
+
+    #[test]
+    fn flash_both_address_methods_rejected() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "probe-rs run {path}"
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+address = "0x200000"
+partition_table = "./partitions.csv"
+partition_name = "littlefs"
+"#,
+        );
+        let err = parse_and_validate(&toml).unwrap_err();
+        assert!(matches!(err, ConfigError::BothAddressMethods));
+    }
+
+    #[test]
+    fn flash_no_address_method_rejected() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "probe-rs run {path}"
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+"#,
+        );
+        let err = parse_and_validate(&toml).unwrap_err();
+        assert!(matches!(err, ConfigError::NoAddressMethod));
+    }
+
+    #[test]
+    fn flash_partition_table_without_name_rejected() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "probe-rs run {path}"
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+partition_table = "./partitions.csv"
+"#,
+        );
+        let err = parse_and_validate(&toml).unwrap_err();
+        assert!(matches!(err, ConfigError::IncompletePartitionConfig));
+    }
+
+    #[test]
+    fn flash_partition_name_without_table_rejected() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "probe-rs run {path}"
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+partition_name = "littlefs"
+"#,
+        );
+        let err = parse_and_validate(&toml).unwrap_err();
+        assert!(matches!(err, ConfigError::IncompletePartitionConfig));
+    }
+
+    #[test]
+    fn flash_unknown_field_rejected() {
+        let toml = flash_toml(
+            r#"
+[flash.firmware]
+command = "probe-rs run {path}"
+bogus = true
+
+[flash.filesystem]
+command = "esptool write-flash {address} {path}"
+address = "0x200000"
+"#,
+        );
+        let err = parse_and_validate(&toml).unwrap_err();
+        assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn flash_section_optional() {
+        let toml = minimal_image_toml("block_count = 128\npage_size = 256");
+        let config = parse_and_validate(&toml).unwrap();
+        assert!(config.flash.is_none());
     }
 }
