@@ -16,10 +16,13 @@ runner = "picotool load -u -v -x -t elf"
 # * linker argument -Tdefmt.x also tells the linker to use `defmt.x` as a
 #   secondary linker script. This is required to make defmt_rtt work.
 rustflags = [
-    "-C", "link-arg=--nmagic",
-    "-C", "link-arg=-Tlink.x",
-    "-C", "link-arg=-Tdefmt.x",
-    "-C", "target-cpu=cortex-m33",
+  "-C",
+  "link-arg=--nmagic",
+  "-C",
+  "link-arg=-Tlink.x",
+  # "-C", "link-arg=-Tdefmt.x",
+  "-C",
+  "target-cpu=cortex-m33",
 ]
 
 [build]
