@@ -73,6 +73,59 @@
           }
         );
 
+        devShells.rp = mkShell (
+          bindgenEnv # ← was cEnv — drops the global CC="gcc" and AR="ar"
+          // {
+            name = "lfs2-rp";
+            buildInputs = [
+              probe-rs-tools
+              picotool
+              gcc-arm-embedded # ← provides arm-none-eabi-gcc
+
+              (pkgs.rust-bin.stable.latest.default.override {
+                extensions = [
+                  "rust-src"
+                  "clippy"
+                  "rust-analyzer"
+                ];
+                targets = [
+                  "thumbv8m.main-none-eabihf"
+                ];
+              })
+            ]
+            ++ cDeps
+            ++ cLibs
+            ++ rustDeps;
+
+            # Tell the cc crate to use the ARM cross-compiler for this target
+            CC_thumbv8m_main_none_eabihf = "arm-none-eabi-gcc";
+            AR_thumbv8m_main_none_eabihf = "arm-none-eabi-ar";
+
+            LD_LIBRARY_PATH = lib.makeLibraryPath (cDeps ++ cLibs ++ [ stdenv.cc.cc.lib ]);
+
+            shellHook = ''
+              if [ ! -f /etc/udev/rules.d/69-probe-rs.rules ]; then
+                echo "⚠ No probe-rs udev rules found. Run once to fix:"
+                echo "  curl -o /tmp/69-probe-rs.rules https://probe.rs/files/69-probe-rs.rules"
+                echo "  sudo cp /tmp/69-probe-rs.rules /etc/udev/rules.d/"
+                echo "  sudo udevadm control --reload-rules && sudo udevadm trigger"
+                echo ""
+                echo "  Or if you're on NixOS, add a udev rule to your configuration:"
+                echo "  services.udev.packages = ["
+                echo "    (pkgs.writeTextFile {"
+                echo "      name = \"probe-rs-udev-rules\";"
+                echo "      destination = \"/etc/udev/rules.d/69-probe-rs.rules\"";
+                echo "      text = '''"
+                echo "        # Raspberry Pi / RP2350 (bootloader and debug probe)"
+                echo "        ATTRS{idVendor}==\"2e8a\", MODE=\"0666\", GROUP=\"plugdev\""
+                echo "      ''';"
+                echo "     })"
+                echo "  ];"
+              fi
+            '';
+          }
+        );
+
         devShells.esp = mkShell (
           bindgenEnv
           // {
