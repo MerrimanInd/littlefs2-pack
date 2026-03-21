@@ -3,6 +3,10 @@
 # the on-device bindings and the `littlefs` tool to create
 # the image.
 [image]
+# Optionally, give your image a name. This is the name sans file extension
+# as multiple files will be generated (`.bin`, `.rs`) etc.
+# If no name is provided it will default to a const, `filesystem`.
+name = "littlefs"
 
 # Filesystem block (erase unit) size in bytes.
 # Must be >= 128 and a multiple of both read-size and write-size.

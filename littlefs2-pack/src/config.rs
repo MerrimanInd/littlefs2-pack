@@ -34,6 +34,9 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+use crate::pack::PackedPaths;
+const DEFAULT_IMAGE_NAME: &'static str = "filesystem";
+
 /// Errors that can occur when loading or validating a configuration file.
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -201,6 +204,7 @@ impl Config {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawImageConfig {
+    name: Option<String>,
     block_size: usize,
     block_count: Option<usize>,
     image_size: Option<usize>,
@@ -220,6 +224,8 @@ impl RawImageConfig {
     /// and computed fields (e.g. `block_count` from `image_size`) are handled
     /// here. The resulting `ImageConfig` contains only concrete values.
     pub fn resolve(self) -> Result<ImageConfig, ConfigError> {
+        let name = self.name.unwrap_or(DEFAULT_IMAGE_NAME.into());
+
         let read_size = self
             .read_size
             .or(self.page_size)
@@ -281,6 +287,7 @@ impl RawImageConfig {
             block_cycles: self.block_cycles,
             cache_size,
             lookahead_size,
+            name,
         })
     }
 
@@ -291,6 +298,7 @@ impl RawImageConfig {
     /// to obtain a validated [`ImageConfig`].
     pub fn new() -> Self {
         Self {
+            name: Some(DEFAULT_IMAGE_NAME.into()),
             block_size: 16,
             block_count: None,
             image_size: None,
@@ -364,6 +372,7 @@ impl RawImageConfig {
 /// or directly if you are managing correctness yourself.
 #[derive(Clone, Debug)]
 pub struct ImageConfig {
+    pub name: String,
     pub block_size: usize,
     pub block_count: usize,
     pub read_size: usize,
@@ -857,6 +866,23 @@ glob_ignores = []
 glob_includes = []
 "#
         )
+    }
+
+    // -------------------------------------------------------------------------
+    // Image name
+    // -------------------------------------------------------------------------
+    #[test]
+    fn default_name() {
+        let toml = minimal_image_toml("");
+        let config = parse_and_validate(&toml).unwrap();
+        assert_eq!(config.image.name, DEFAULT_IMAGE_NAME);
+    }
+
+    #[test]
+    fn set_name() {
+        let toml = minimal_image_toml("name = \"custom_image\" ");
+        let config = parse_and_validate(&toml).unwrap();
+        assert_eq!(config.image.name, "custom_image");
     }
 
     // -------------------------------------------------------------------------

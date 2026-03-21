@@ -74,6 +74,11 @@ pub mod partition_table;
 ///   `include_bytes!`, and an optional `paths` module mirroring the
 ///   packed directory layout.
 ///
+/// Also copies the built filesystem image up to the target/<profile> directory.
+/// The `$OUT_DIR` is difficult to access during flash or runtime since it's
+/// a hash encoded build directory. This step makes the image much easier to
+/// find at flash time.
+///
 /// # Usage in `build.rs`
 ///
 /// ```rust,no_run
@@ -98,12 +103,23 @@ pub mod partition_table;
 /// panic behavior is because a build should not proceed if this step
 /// doesn't succeed.
 pub fn pack_and_generate_config(littlefs_config: &Path) {
-    let image_name = String::from("filesystem");
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    let img_file_path = format!("{}/{}.bin", out_dir, image_name);
-    // let rust_file_path = format!("{}/{}.rs", out_dir, image_name);
-
+    // Load the config from the file
     let config = Config::from_file(littlefs_config).unwrap();
+
+    let image_name = config.image.name.clone();
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+
+    // OUT_DIR is like target/<triple>/<profile>/build/<crate>-<hash>/out
+    // The issue with this directory is that it's only easily accessible
+    // at compile time, it's hard to discern at run time. This script
+    // copies the image up to the target profile directory after build
+    // so the image can be found at flash time
+    let profile_dir = Path::new(&out_dir)
+        .ancestors()
+        .nth(3) // out/ -> <crate>-<hash>/ -> build/ -> <profile>/
+        .unwrap();
+    let img_file_path = format!("{}/{}.bin", out_dir, image_name);
+    let rust_file_path = format!("{}/{}.rs", out_dir, image_name);
 
     let image_config = config.image.clone();
     let mut image = LfsImage::new(config.image).unwrap();
@@ -122,14 +138,17 @@ pub fn pack_and_generate_config(littlefs_config: &Path) {
     image_config
         .emit_rust(
             Path::new(&out_dir),
-            "filesystem.bin",
+            &format!("{}.bin", image_name),
             Some((&packed.dirs, &packed.files)),
         )
         .unwrap();
 
     let binary = image.into_data();
 
-    std::fs::write(img_file_path, &binary).unwrap();
+    std::fs::write(&img_file_path, &binary).unwrap();
+
+    // Copy the binary up to the profile directory
+    std::fs::copy(&img_file_path, profile_dir.join("filesystem.bin")).unwrap();
 }
 
 /// Generate a Rust module with partition offset and size constants
