@@ -32,14 +32,6 @@ pub(crate) struct PathSet {
 }
 
 impl PathSet {
-    fn new() -> Self {
-        PathSet {
-            dirs: Vec::new(),
-            files: Vec::new(),
-            root: PathBuf::new(),
-        }
-    }
-
     fn new_at(root: PathBuf) -> Self {
         PathSet {
             dirs: Vec::new(),
@@ -51,11 +43,6 @@ impl PathSet {
     fn contains(&self, path: &str) -> bool {
         let path_string: String = path.to_string();
         self.dirs.contains(&path_string) || self.files.contains(&path_string)
-    }
-
-    fn merge(&mut self, other: PathSet) {
-        self.dirs.extend(other.dirs);
-        self.files.extend(other.files);
     }
 
     fn sort(&mut self) {

@@ -2,7 +2,6 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use littlefs2_pack::config::{Config, ImageConfig, RawImageConfig};
 use littlefs2_pack::littlefs::{LfsError, LfsImage, MountedFs};
-use littlefs2_pack::pack::pack_directory;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -347,12 +346,10 @@ fn cmd_pack(config_path: &Option<PathBuf>, args: PackCmd) -> Result<()> {
     let mut image = LfsImage::new(image_config)?;
     image.format()?;
 
-    image.mount_and_then(|fs| match &directory_config {
-        Some(dir_config) => pack_directory(fs, dir_config)
-            .map(|_| ())
-            .map_err(|e| LfsError::Io(e.to_string())),
-        None => pack_directory_simple(fs, &root, ""),
-    })?;
+    match directory_config {
+        Some(dir_config) => image.pack_from_config(dir_config)?,
+        None => image.pack_from_dir(&root)?,
+    };
 
     let data = image.into_data();
     std::fs::write(&args.output, &data)
@@ -370,44 +367,19 @@ fn cmd_pack(config_path: &Option<PathBuf>, args: PackCmd) -> Result<()> {
     Ok(())
 }
 
-/// Simple recursive directory packing without ignore/glob rules.
-/// Used when no TOML config is provided.
-fn pack_directory_simple(
-    fs: &MountedFs<'_>,
-    host_dir: &Path,
-    lfs_prefix: &str,
-) -> Result<(), LfsError> {
-    let mut entries: Vec<_> = std::fs::read_dir(host_dir)
-        .map_err(|e| LfsError::Io(e.to_string()))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| LfsError::Io(e.to_string()))?;
+// ---------------------------------------------------------------------------
+// Shared: load an existing image
+// ---------------------------------------------------------------------------
 
-    // Sort for deterministic output
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in entries {
-        let file_type = entry.file_type().map_err(|e| LfsError::Io(e.to_string()))?;
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        let lfs_path = if lfs_prefix.is_empty() {
-            format!("/{name_str}")
-        } else {
-            format!("{lfs_prefix}/{name_str}")
-        };
-
-        if file_type.is_dir() {
-            println!("  mkdir  {lfs_path}");
-            fs.create_dir(&lfs_path)?;
-            pack_directory_simple(fs, &entry.path(), &lfs_path)?;
-        } else if file_type.is_file() {
-            let data = std::fs::read(entry.path()).map_err(|e| LfsError::Io(e.to_string()))?;
-            println!("  write  {lfs_path} ({} bytes)", data.len());
-            fs.write_file(&lfs_path, &data)?;
-        }
-    }
-
-    Ok(())
+fn load_image(
+    config_path: &Option<PathBuf>,
+    cli: &ImageConfigParams,
+    image_path: &Path,
+) -> Result<LfsImage> {
+    let data = std::fs::read(image_path)
+        .with_context(|| format!("failed to read image '{}'", image_path.display()))?;
+    let config = image_config_for_reading(config_path, cli, &data)?;
+    Ok(LfsImage::from_data(config, data)?)
 }
 
 // ---------------------------------------------------------------------------
@@ -415,10 +387,7 @@ fn pack_directory_simple(
 // ---------------------------------------------------------------------------
 
 fn cmd_unpack(config_path: &Option<PathBuf>, args: UnpackCmd) -> Result<()> {
-    let data = std::fs::read(&args.image)
-        .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
-    let config = image_config_for_reading(config_path, &args.fs, &data)?;
-    let mut image = LfsImage::from_data(config, data)?;
+    let mut image = load_image(config_path, &args.fs, &args.image)?;
 
     std::fs::create_dir_all(&args.unpack_directory)
         .with_context(|| format!("failed to create '{}'", args.unpack_directory.display()))?;
@@ -446,11 +415,11 @@ fn unpack_directory(fs: &MountedFs<'_>, lfs_dir: &str, host_dir: &Path) -> Resul
         };
 
         if entry.is_dir {
-            std::fs::create_dir_all(&host_path).map_err(|e| LfsError::Io(e.to_string()))?;
+            std::fs::create_dir_all(&host_path)?;
             unpack_directory(fs, &lfs_child, &host_path)?;
         } else {
             let data = fs.read_file(&lfs_child)?;
-            std::fs::write(&host_path, &data).map_err(|e| LfsError::Io(e.to_string()))?;
+            std::fs::write(&host_path, &data)?;
             println!("  extract {} ({} bytes)", host_path.display(), data.len());
         }
     }
@@ -463,10 +432,7 @@ fn unpack_directory(fs: &MountedFs<'_>, lfs_dir: &str, host_dir: &Path) -> Resul
 // ---------------------------------------------------------------------------
 
 fn cmd_list(config_path: &Option<PathBuf>, args: ListCmd) -> Result<()> {
-    let data = std::fs::read(&args.image)
-        .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
-    let config = image_config_for_reading(config_path, &args.fs, &data)?;
-    let mut image = LfsImage::from_data(config, data)?;
+    let mut image = load_image(config_path, &args.fs, &args.image)?;
 
     image.mount_and_then(|fs| {
         println!("/");
@@ -507,14 +473,10 @@ fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, prefix: &str) -> Result<(),
 // ---------------------------------------------------------------------------
 
 fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
-    let data = std::fs::read(&args.image)
-        .with_context(|| format!("failed to read image '{}'", args.image.display()))?;
-    let config = image_config_for_reading(config_path, &args.fs, &data)?;
+    let mut image = load_image(config_path, &args.fs, &args.image)?;
 
-    let bc = config.block_count;
-    let bs = config.block_size;
-
-    let mut image = LfsImage::from_data(config, data)?;
+    let bc = image.config().block_count;
+    let bs = image.config().block_size;
 
     image.mount_and_then(|fs| {
         let used = fs.used_blocks()?;
@@ -546,7 +508,8 @@ fn cmd_flash(config_path: &Option<PathBuf>, args: FlashCmd) -> Result<()> {
         .flash
         .context("project config file must have [flash] section defined!")?;
 
-    let path = args
+    // Get the paths to the binary and the filesystem image
+    let binary_path = args
         .binary_path
         .or(flash_config.firmware.path)
         .context("no firmware path (pass as argument or set path in [flash.firmware])")?;
@@ -554,7 +517,10 @@ fn cmd_flash(config_path: &Option<PathBuf>, args: FlashCmd) -> Result<()> {
     // Run the flash command
     run_command(
         &flash_config.firmware.command,
-        &[("path", path.to_str().context("invalid binary file path")?)],
+        &[(
+            "path",
+            binary_path.to_str().context("invalid binary file path")?,
+        )],
     )
     .context("failed to flash binary")?;
 
@@ -597,7 +563,7 @@ fn run_command(template: &str, vars: &[(&str, &str)]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use littlefs2_pack::config::ImageConfig;
+    use littlefs2_pack::config::{DEFAULT_IMAGE_NAME, ImageConfig};
     use std::fs;
 
     // -------------------------------------------------------------------------
@@ -780,6 +746,7 @@ glob_includes = []
 
     fn test_base_config() -> ImageConfig {
         ImageConfig {
+            name: DEFAULT_IMAGE_NAME.into(),
             block_size: 4096,
             block_count: 128,
             read_size: 256,
@@ -793,6 +760,7 @@ glob_includes = []
     #[test]
     fn overrides_no_cli_args_preserves_toml() {
         let base = ImageConfig {
+            name: DEFAULT_IMAGE_NAME.into(),
             block_size: 4096,
             block_count: 128,
             read_size: 16,
