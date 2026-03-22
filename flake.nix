@@ -78,6 +78,7 @@
           // {
             name = "lfs2-rp";
             buildInputs = [
+              self.packages.${system}.default
               probe-rs-tools
               picotool
               gcc-arm-embedded # ← provides arm-none-eabi-gcc
@@ -131,6 +132,7 @@
           // {
             name = "lfs2-esp";
             buildInputs = [
+              self.packages.${system}.default
               # Don't include rust-bin here — espup manages the toolchain
               rustup
               espup
