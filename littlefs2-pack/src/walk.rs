@@ -1,15 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::DirectoryConfig;
-use crate::littlefs::MountedFs;
 use ignore::{WalkBuilder, overrides::OverrideBuilder};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum PackError {
-    #[error("LittleFS error: {0}")]
-    Lfs(#[from] crate::littlefs::LfsError),
-
+pub enum WalkError {
     #[error("directory walk error: {0}")]
     Walk(#[from] ignore::Error),
 
@@ -26,11 +22,50 @@ pub enum PackError {
 /// include the leading `/` (e.g. `/config`), and file paths include
 /// the full LFS path (e.g. `/config/network.json`).
 #[derive(Clone, Debug, Default)]
-pub struct PackedPaths {
+pub(crate) struct PathSet {
+    /// The root relative path
+    pub root: PathBuf,
     /// Directories created in the image (e.g. `"/config"`).
     pub dirs: Vec<String>,
     /// Files written to the image (e.g. `"/config/network.json"`).
     pub files: Vec<String>,
+}
+
+impl PathSet {
+    fn new() -> Self {
+        PathSet {
+            dirs: Vec::new(),
+            files: Vec::new(),
+            root: PathBuf::new(),
+        }
+    }
+
+    fn new_at(root: PathBuf) -> Self {
+        PathSet {
+            dirs: Vec::new(),
+            files: Vec::new(),
+            root,
+        }
+    }
+
+    fn contains(&self, path: &str) -> bool {
+        let path_string: String = path.to_string();
+        self.dirs.contains(&path_string) || self.files.contains(&path_string)
+    }
+
+    fn merge(&mut self, other: PathSet) {
+        self.dirs.extend(other.dirs);
+        self.files.extend(other.files);
+    }
+
+    fn sort(&mut self) {
+        self.dirs.sort();
+        self.files.sort();
+    }
+
+    pub fn host_path(&self, lfs_path: &str) -> PathBuf {
+        self.root.join(lfs_path.trim_start_matches('/'))
+    }
 }
 
 /// Build a `WalkBuilder` from a `DirectoryConfig`.
@@ -79,14 +114,14 @@ pub(crate) fn walker(config: &DirectoryConfig) -> WalkBuilder {
 /// Convert a host path to a LittleFS path by stripping the root prefix.
 ///
 /// `./website/css/style.css` with root `./website` becomes `/css/style.css`.
-fn to_lfs_path(host_path: &Path, root: &Path) -> Result<String, PackError> {
+fn to_lfs_path(host_path: &Path, root: &Path) -> Result<String, WalkError> {
     let relative = host_path
         .strip_prefix(root)
-        .map_err(|_| PackError::InvalidPath(host_path.to_owned()))?;
+        .map_err(|_| WalkError::InvalidPath(host_path.to_owned()))?;
 
     let s = relative
         .to_str()
-        .ok_or_else(|| PackError::InvalidPath(host_path.to_owned()))?;
+        .ok_or_else(|| WalkError::InvalidPath(host_path.to_owned()))?;
 
     Ok(format!("/{s}"))
 }
@@ -99,16 +134,12 @@ fn to_lfs_path(host_path: &Path, root: &Path) -> Result<String, PackError> {
 /// `glob_includes` patterns are handled via a separate rescue walk: a
 /// second pass with all ignore rules disabled that picks up any files
 /// matching an include pattern that the main walk skipped.
-pub fn pack_directory(
-    fs: &MountedFs<'_>,
-    config: &DirectoryConfig,
-) -> Result<PackedPaths, PackError> {
+pub(crate) fn walk_directory(config: &DirectoryConfig) -> Result<PathSet, WalkError> {
     let root = &config.resolved_root;
     let walk = walker(config);
 
-    let mut dirs: Vec<String> = Vec::new();
-    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut to_pack = PathSet::new_at(root.clone());
+    let mut seen = PathSet::new_at(root.clone());
 
     // Main walk: go through the directory and collect all of the files and
     // directories except for those matching the negative ignore configs.
@@ -122,17 +153,16 @@ pub fn pack_directory(
 
         let ft = entry
             .file_type()
-            .ok_or_else(|| PackError::InvalidPath(entry.path().to_owned()))?;
+            .ok_or_else(|| WalkError::InvalidPath(entry.path().to_owned()))?;
 
         let lfs_path = to_lfs_path(entry.path(), root)?;
 
         if ft.is_dir() {
-            seen.insert(lfs_path.clone());
-            dirs.push(lfs_path);
+            seen.dirs.push(lfs_path.clone());
+            to_pack.dirs.push(lfs_path);
         } else if ft.is_file() {
-            seen.insert(lfs_path.clone());
-            let data = std::fs::read(entry.path())?;
-            files.push((lfs_path, data));
+            seen.files.push(lfs_path.clone());
+            to_pack.files.push(lfs_path);
         }
     }
 
@@ -160,7 +190,7 @@ pub fn pack_directory(
 
             let ft = entry
                 .file_type()
-                .ok_or_else(|| PackError::InvalidPath(entry.path().to_owned()))?;
+                .ok_or_else(|| WalkError::InvalidPath(entry.path().to_owned()))?;
 
             let lfs_path = to_lfs_path(entry.path(), root)?;
 
@@ -182,8 +212,8 @@ pub fn pack_directory(
             }
 
             if ft.is_dir() {
-                seen.insert(lfs_path.clone());
-                dirs.push(lfs_path);
+                seen.dirs.push(lfs_path.clone());
+                to_pack.dirs.push(lfs_path);
             } else if ft.is_file() {
                 // Ensure parent directories of rescued files are created.
                 // The parent might have been skipped by the main walk
@@ -192,70 +222,44 @@ pub fn pack_directory(
                     if parent != root.as_path() {
                         let parent_lfs = to_lfs_path(parent, root)?;
                         if !seen.contains(&parent_lfs) {
-                            seen.insert(parent_lfs.clone());
-                            dirs.push(parent_lfs);
+                            seen.files.push(parent_lfs.clone());
+                            to_pack.dirs.push(parent_lfs);
                         }
                     }
                 }
-                seen.insert(lfs_path.clone());
-                let data = std::fs::read(entry.path())?;
-                files.push((lfs_path, data));
+                seen.files.push(lfs_path.clone());
+                to_pack.files.push(lfs_path);
             }
         }
     }
 
-    // Sort for deterministic output
-    dirs.sort();
-    files.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    for path in &dirs {
-        fs.create_dir_all(path)?;
-    }
-    for (path, data) in &files {
-        fs.write_file(path, data)?;
-    }
-
-    let file_paths = files.into_iter().map(|(p, _)| p).collect();
-    Ok(PackedPaths {
-        dirs,
-        files: file_paths,
-    })
+    // Sort for deterministic packing
+    to_pack.sort();
+    Ok(to_pack)
 }
 
 /// Simple recursive directory packing without ignore/glob rules.
 /// Used when no TOML config is provided.
-pub fn pack_directory_simple(
-    fs: &MountedFs<'_>,
-    host_dir: &Path,
-    lfs_prefix: &str,
-) -> Result<(), PackError> {
-    let mut entries: Vec<_> = std::fs::read_dir(host_dir)
-        .map_err(|e| PackError::Io(e))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| PackError::Io(e))?;
+pub(crate) fn walk_directory_simple(root: &Path) -> Result<PathSet, WalkError> {
+    let mut to_pack = PathSet::new_at(root.to_owned());
+    walk_recursive(root, root, &mut to_pack)?;
+    Ok(to_pack)
+}
 
-    // Sort for deterministic output
+fn walk_recursive(dir: &Path, root: &Path, to_pack: &mut PathSet) -> Result<(), WalkError> {
+    let mut entries: Vec<_> = std::fs::read_dir(dir)?.collect::<Result<Vec<_>, _>>()?;
     entries.sort_by_key(|e| e.file_name());
 
     for entry in entries {
-        let file_type = entry.file_type().map_err(|e| PackError::Io(e))?;
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        let lfs_path = if lfs_prefix.is_empty() {
-            format!("/{name_str}")
-        } else {
-            format!("{lfs_prefix}/{name_str}")
-        };
+        let file_type = entry.file_type()?;
+        let path = entry.path();
+        let lfs_path = to_lfs_path(&path, root)?;
 
         if file_type.is_dir() {
-            println!("  mkdir  {lfs_path}");
-            fs.create_dir(&lfs_path)?;
-            pack_directory_simple(fs, &entry.path(), &lfs_path)?;
+            to_pack.dirs.push(lfs_path);
+            walk_recursive(&path, root, to_pack)?;
         } else if file_type.is_file() {
-            let data = std::fs::read(entry.path()).map_err(|e| PackError::Io(e))?;
-            println!("  write  {lfs_path} ({} bytes)", data.len());
-            fs.write_file(&lfs_path, &data)?;
+            to_pack.files.push(lfs_path);
         }
     }
 
@@ -265,31 +269,13 @@ pub fn pack_directory_simple(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DirectoryConfig, ImageConfig};
-    use crate::littlefs::{LfsError, LfsImage};
+    use crate::config::DirectoryConfig;
     use globset::{Glob, GlobSetBuilder};
     use std::fs;
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    fn test_image_config() -> ImageConfig {
-        ImageConfig {
-            block_size: 4096,
-            block_count: 16,
-            read_size: 256,
-            write_size: 256,
-            block_cycles: -1,
-            cache_size: 256,
-            lookahead_size: 8,
-        }
-    }
-
-    /// Wrap pack functions for use inside `mount_and_then` (which requires `LfsError`).
-    fn pack_err<T>(r: Result<T, PackError>) -> Result<T, LfsError> {
-        r.map_err(|e| LfsError::Io(e.to_string()))
-    }
 
     /// Build a DirectoryConfig directly from parameters.
     fn make_dir_config(
@@ -388,7 +374,7 @@ mod tests {
     fn lfs_path_wrong_root_fails() {
         let err =
             to_lfs_path(Path::new("/tmp/site/index.html"), Path::new("/tmp/other")).unwrap_err();
-        assert!(matches!(err, PackError::InvalidPath(_)));
+        assert!(matches!(err, WalkError::InvalidPath(_)));
     }
 
     // -------------------------------------------------------------------------
@@ -513,176 +499,235 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // pack_directory: integration with LfsImage
+    // walk_directory: returns correct structure
     // -------------------------------------------------------------------------
 
     #[test]
-    fn pack_creates_correct_structure() {
+    fn walk_returns_correct_structure() {
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = default_dir_config(dir.path());
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let config = default_dir_config(dir.path());
+        let paths = walk_directory(&config).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config))?;
+        assert!(paths.files.contains(&"/index.html".to_string()));
+        assert!(paths.files.contains(&"/css/style.css".to_string()));
+        assert!(paths.files.contains(&"/js/app.js".to_string()));
 
-                assert!(fs.exists("/index.html"));
-                assert!(fs.exists("/css/style.css"));
-                assert!(fs.exists("/js/app.js"));
-
-                let html = fs.read_file("/index.html")?;
-                assert_eq!(html, b"<html>hello</html>");
-
-                let css = fs.read_file("/css/style.css")?;
-                assert_eq!(css, b"body {}");
-
-                Ok(())
-            })
-            .unwrap();
+        assert!(paths.dirs.contains(&"/css".to_string()));
+        assert!(paths.dirs.contains(&"/js".to_string()));
+        assert!(paths.dirs.contains(&"/build".to_string()));
     }
 
     #[test]
-    fn pack_respects_hidden_ignore() {
+    fn walk_stores_root() {
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = default_dir_config(dir.path());
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let config = default_dir_config(dir.path());
+        let paths = walk_directory(&config).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config))?;
-                assert!(!fs.exists("/.hidden"));
-                assert!(fs.exists("/index.html"));
-                Ok(())
-            })
-            .unwrap();
+        assert_eq!(paths.root, dir.path());
     }
 
     #[test]
-    fn pack_includes_hidden_when_configured() {
+    fn walk_respects_hidden_ignore() {
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = make_dir_config(dir.path(), -1, false, &[], &[]);
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let config = default_dir_config(dir.path());
+        let paths = walk_directory(&config).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config))?;
-                assert!(fs.exists("/.hidden"));
-                Ok(())
-            })
-            .unwrap();
+        assert!(!paths.files.contains(&"/.hidden".to_string()));
+        assert!(paths.files.contains(&"/index.html".to_string()));
     }
 
     #[test]
-    fn pack_with_glob_ignores() {
+    fn walk_includes_hidden_when_configured() {
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = make_dir_config(dir.path(), -1, true, &["build"], &[]);
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let config = make_dir_config(dir.path(), -1, false, &[], &[]);
+        let paths = walk_directory(&config).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config))?;
-                assert!(!fs.exists("/build"));
-                assert!(!fs.exists("/build/output.bin"));
-                assert!(fs.exists("/index.html"));
-                Ok(())
-            })
-            .unwrap();
+        assert!(paths.files.contains(&"/.hidden".to_string()));
     }
 
     #[test]
-    fn pack_empty_directory() {
+    fn walk_with_glob_ignores() {
+        let dir = tempfile::tempdir().unwrap();
+        create_test_directory(dir.path());
+
+        let config = make_dir_config(dir.path(), -1, true, &["build"], &[]);
+        let paths = walk_directory(&config).unwrap();
+
+        assert!(!paths.dirs.contains(&"/build".to_string()));
+        assert!(!paths.files.contains(&"/build/output.bin".to_string()));
+        assert!(paths.files.contains(&"/index.html".to_string()));
+    }
+
+    #[test]
+    fn walk_empty_directory() {
         let dir = tempfile::tempdir().unwrap();
 
-        let dir_config = default_dir_config(dir.path());
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let config = default_dir_config(dir.path());
+        let paths = walk_directory(&config).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory(fs, &dir_config))?;
-                let entries = fs.read_dir("/")?;
-                assert!(entries.is_empty());
-                Ok(())
-            })
-            .unwrap();
+        assert!(paths.dirs.is_empty());
+        assert!(paths.files.is_empty());
     }
 
     // -------------------------------------------------------------------------
-    // pack_directory: deterministic output
+    // walk_directory: deterministic output
     // -------------------------------------------------------------------------
 
     #[test]
-    fn pack_is_deterministic() {
+    fn walk_is_deterministic() {
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let dir_config = default_dir_config(dir.path());
+        let config = default_dir_config(dir.path());
 
-        let pack_once = || {
-            let mut image = LfsImage::new(test_image_config()).unwrap();
-            image.format().unwrap();
-            image
-                .mount_and_then(|fs| pack_err(pack_directory(fs, &dir_config)))
-                .unwrap();
-            image.into_data()
-        };
+        let first = walk_directory(&config).unwrap();
+        let second = walk_directory(&config).unwrap();
 
-        assert_eq!(pack_once(), pack_once());
+        assert_eq!(first.dirs, second.dirs);
+        assert_eq!(first.files, second.files);
     }
 
     // -------------------------------------------------------------------------
-    // pack_directory_simple
+    // walk_directory_simple
     // -------------------------------------------------------------------------
 
     #[test]
-    fn simple_pack_includes_everything() {
+    fn simple_walk_includes_everything() {
         let dir = tempfile::tempdir().unwrap();
         create_test_directory(dir.path());
 
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let paths = walk_directory_simple(dir.path()).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory_simple(fs, dir.path(), ""))?;
-                assert!(fs.exists("/index.html"));
-                assert!(fs.exists("/css/style.css"));
-                assert!(fs.exists("/js/app.js"));
-                // No ignore rules — everything included
-                assert!(fs.exists("/.hidden"));
-                assert!(fs.exists("/build/output.bin"));
-                Ok(())
-            })
-            .unwrap();
+        assert!(paths.files.contains(&"/index.html".to_string()));
+        assert!(paths.files.contains(&"/css/style.css".to_string()));
+        assert!(paths.files.contains(&"/js/app.js".to_string()));
+        // No ignore rules — everything included
+        assert!(paths.files.contains(&"/.hidden".to_string()));
+        assert!(paths.files.contains(&"/build/output.bin".to_string()));
     }
 
     #[test]
-    fn simple_pack_preserves_content() {
+    fn simple_walk_includes_directories() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("test.txt"), "hello world").unwrap();
+        create_test_directory(dir.path());
 
-        let mut image = LfsImage::new(test_image_config()).unwrap();
-        image.format().unwrap();
+        let paths = walk_directory_simple(dir.path()).unwrap();
 
-        image
-            .mount_and_then(|fs| {
-                pack_err(pack_directory_simple(fs, dir.path(), ""))?;
-                let data = fs.read_file("/test.txt")?;
-                assert_eq!(data, b"hello world");
-                Ok(())
-            })
-            .unwrap();
+        assert!(paths.dirs.contains(&"/css".to_string()));
+        assert!(paths.dirs.contains(&"/js".to_string()));
+        assert!(paths.dirs.contains(&"/build".to_string()));
+    }
+
+    #[test]
+    fn simple_walk_stores_root() {
+        let dir = tempfile::tempdir().unwrap();
+        create_test_directory(dir.path());
+
+        let paths = walk_directory_simple(dir.path()).unwrap();
+
+        assert_eq!(paths.root, dir.path());
+    }
+
+    #[test]
+    fn simple_walk_deeply_nested() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir_all(root.join("a/b/c")).unwrap();
+        fs::write(root.join("a/b/c/deep.txt"), "deep").unwrap();
+        fs::write(root.join("a/top.txt"), "top").unwrap();
+
+        let paths = walk_directory_simple(root).unwrap();
+
+        assert!(paths.dirs.contains(&"/a".to_string()));
+        assert!(paths.dirs.contains(&"/a/b".to_string()));
+        assert!(paths.dirs.contains(&"/a/b/c".to_string()));
+        assert!(paths.files.contains(&"/a/top.txt".to_string()));
+        assert!(paths.files.contains(&"/a/b/c/deep.txt".to_string()));
+    }
+
+    #[test]
+    fn simple_walk_empty_directory() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let paths = walk_directory_simple(dir.path()).unwrap();
+
+        assert!(paths.dirs.is_empty());
+        assert!(paths.files.is_empty());
+    }
+
+    // -------------------------------------------------------------------------
+    // PathSet::host_path
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn host_path_resolves_root_file() {
+        let paths = PathSet::new_at(PathBuf::from("/tmp/site"));
+
+        assert_eq!(
+            paths.host_path("/index.html"),
+            PathBuf::from("/tmp/site/index.html")
+        );
+    }
+
+    #[test]
+    fn host_path_resolves_nested_file() {
+        let paths = PathSet::new_at(PathBuf::from("/tmp/site"));
+
+        assert_eq!(
+            paths.host_path("/css/style.css"),
+            PathBuf::from("/tmp/site/css/style.css")
+        );
+    }
+
+    #[test]
+    fn host_path_roundtrips_through_walk() {
+        let dir = tempfile::tempdir().unwrap();
+        create_test_directory(dir.path());
+
+        let config = default_dir_config(dir.path());
+        let paths = walk_directory(&config).unwrap();
+
+        // Every file in the walk result should resolve to a host path that exists
+        for lfs_path in &paths.files {
+            let host = paths.host_path(lfs_path);
+            assert!(host.exists(), "host path should exist: {}", host.display());
+        }
+        for lfs_path in &paths.dirs {
+            let host = paths.host_path(lfs_path);
+            assert!(
+                host.is_dir(),
+                "host path should be a dir: {}",
+                host.display()
+            );
+        }
+    }
+
+    #[test]
+    fn host_path_roundtrips_through_simple_walk() {
+        let dir = tempfile::tempdir().unwrap();
+        create_test_directory(dir.path());
+
+        let paths = walk_directory_simple(dir.path()).unwrap();
+
+        for lfs_path in &paths.files {
+            let host = paths.host_path(lfs_path);
+            assert!(host.exists(), "host path should exist: {}", host.display());
+        }
+        for lfs_path in &paths.dirs {
+            let host = paths.host_path(lfs_path);
+            assert!(
+                host.is_dir(),
+                "host path should be a dir: {}",
+                host.display()
+            );
+        }
     }
 }

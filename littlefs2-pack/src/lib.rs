@@ -23,6 +23,7 @@
 //! use littlefs2_pack::config::ImageConfig;
 //!
 //! let config = ImageConfig {
+//!     name: String::from("filesystem"),
 //!     block_size: 4096,
 //!     block_count: 128,
 //!     read_size: 256,
@@ -47,17 +48,12 @@
 
 use std::path::Path;
 
-use crate::{
-    config::Config,
-    littlefs::LfsImage,
-    pack::{PackedPaths, pack_directory},
-    partition_table::get_partition,
-};
+use crate::{config::Config, littlefs::LfsImage, partition_table::get_partition};
 
 pub mod config;
 pub mod littlefs;
-pub mod pack;
 pub mod partition_table;
+pub mod walk;
 
 /// Generate a LittleFS image and Rust configuration module from a
 /// `littlefs.toml` file.
@@ -121,30 +117,16 @@ pub fn pack_and_generate_config(littlefs_config: &Path) {
     let img_file_path = format!("{}/{}.bin", out_dir, image_name);
     let rust_file_path = format!("{}/{}.rs", out_dir, image_name);
 
-    let image_config = config.image.clone();
+    // Create, format, and pack the image
     let mut image = LfsImage::new(config.image).unwrap();
     image.format().unwrap();
+    image.pack_from_config(config.directory).unwrap();
 
-    let mut packed_paths: Option<PackedPaths> = None;
-    image
-        .mount_and_then(|fs| {
-            let paths = pack_directory(fs, &config.directory).unwrap();
-            packed_paths = Some(paths);
-            Ok(())
-        })
-        .unwrap();
+    // Generate the Rust config module
+    std::fs::write(&rust_file_path, &image.emit_rust().unwrap()).unwrap();
 
-    let packed = packed_paths.unwrap();
-    image_config
-        .emit_rust(
-            Path::new(&out_dir),
-            &format!("{}.bin", image_name),
-            Some((&packed.dirs, &packed.files)),
-        )
-        .unwrap();
-
+    // Generate the image binary
     let binary = image.into_data();
-
     std::fs::write(&img_file_path, &binary).unwrap();
 
     // Copy the binary up to the profile directory
