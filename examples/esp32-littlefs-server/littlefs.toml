@@ -16,3 +16,12 @@ gitignore = true
 repo_gitignore = true
 glob_ignores = []
 glob_includes = []
+
+[flash.firmware]
+command = "espflash flash --monitor --partition-table partitions.csv --log-format defmt {path}"
+
+[flash.filesystem]
+command = "espflash write-bin {address} {path}"
+# The ESP partitition table and name to read the address from
+partition_table = "./partitions.csv"
+partition_name = "littlefs"

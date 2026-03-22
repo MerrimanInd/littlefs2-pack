@@ -1,6 +1,5 @@
 [target.xtensa-esp32s3-none-elf]
-# runner = "espflash flash --monitor --chip esp32s3 --log-format defmt"
-runner = "espflash flash --partition-table partitions.csv --flash-size 16mb"
+runner = "littlefs flash --config ./littlefs.toml"
 
 [env]
 DEFMT_LOG = "info"

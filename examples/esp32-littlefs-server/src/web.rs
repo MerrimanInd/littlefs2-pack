@@ -1,3 +1,4 @@
+use crate::fs::lfs_config;
 use embassy_net::Stack;
 use embassy_time::Duration;
 use picoserve::{
@@ -85,7 +86,7 @@ impl<State, CurrentPathParameters> PathRouterService<State, CurrentPathParameter
         };
 
         // Safety: we just built this from valid UTF-8 segments
-        let path_str = core::str::from_utf8(&lfs_path).unwrap_or("/index.html");
+        let path_str = core::str::from_utf8(&lfs_path).unwrap_or(lfs_config::paths::INDEX_HTML);
 
         // Read the file from flash into a temporary Vec on internal SRAM.
         // The Vec is freed when this function returns.

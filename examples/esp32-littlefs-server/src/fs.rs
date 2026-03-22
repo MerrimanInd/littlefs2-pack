@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 #[allow(unused)]
 pub mod lfs_config {
-    include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
+    include!(concat!(env!("OUT_DIR"), "/filesystem.rs"));
     include!(concat!(env!("OUT_DIR"), "/partition_config.rs"));
 }
 
