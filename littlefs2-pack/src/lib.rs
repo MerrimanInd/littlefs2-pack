@@ -130,7 +130,7 @@ pub fn pack_and_generate_config(littlefs_config: &Path) {
     std::fs::write(&img_file_path, &binary).unwrap();
 
     // Copy the binary up to the profile directory
-    std::fs::copy(&img_file_path, profile_dir.join("filesystem.bin")).unwrap();
+    std::fs::copy(&img_file_path, profile_dir.join(image_name)).unwrap();
 }
 
 /// Generate a Rust module with partition offset and size constants

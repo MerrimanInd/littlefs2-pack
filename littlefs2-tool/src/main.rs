@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use littlefs2_pack::config::{Config, ImageConfig, RawImageConfig};
 use littlefs2_pack::littlefs::{LfsError, LfsImage, MountedFs};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -239,6 +240,7 @@ fn image_config_for_reading(
 // Subcommand argument structs
 // ---------------------------------------------------------------------------
 
+/// Arguments for the `pack` subcommand.
 #[derive(Args)]
 pub struct PackCmd {
     /// Source directory to pack (overrides TOML [directory] root)
@@ -253,6 +255,7 @@ pub struct PackCmd {
     pub fs: ImageConfigParams,
 }
 
+/// Arguments for the `unpack` subcommand.
 #[derive(Args)]
 pub struct UnpackCmd {
     /// LittleFS2 image file to unpack
@@ -267,6 +270,7 @@ pub struct UnpackCmd {
     pub fs: ImageConfigParams,
 }
 
+/// Arguments for the `list` subcommand.
 #[derive(Args)]
 pub struct ListCmd {
     /// LittleFS2 image file to inspect
@@ -277,6 +281,7 @@ pub struct ListCmd {
     pub fs: ImageConfigParams,
 }
 
+/// Arguments for the `info` subcommand.
 #[derive(Args)]
 pub struct InfoCmd {
     /// LittleFS2 image file to inspect
@@ -287,9 +292,11 @@ pub struct InfoCmd {
     pub fs: ImageConfigParams,
 }
 
+/// Arguments for the `flash` subcommand.
 #[derive(Args)]
 pub struct FlashCmd {
-    // The binary to flash to the device
+    /// Path to the firmware binary. Passed automatically by `cargo run`,
+    /// or falls back to the `path` field in `[flash.firmware]`.
     #[arg(value_name = "BINARY")]
     pub binary_path: Option<PathBuf>,
 }
@@ -316,6 +323,11 @@ fn main() -> Result<()> {
 // pack
 // ---------------------------------------------------------------------------
 
+/// Pack a local directory tree into a LittleFS2 image file.
+///
+/// When a TOML config is provided, image geometry and directory settings
+/// are loaded from it with any CLI flags applied as overrides. Without
+/// a config, all parameters must be supplied on the command line.
 fn cmd_pack(config_path: &Option<PathBuf>, args: PackCmd) -> Result<()> {
     // Resolve everything from TOML + CLI overrides
     let (image_config, root, directory_config) = match config_path {
@@ -371,6 +383,10 @@ fn cmd_pack(config_path: &Option<PathBuf>, args: PackCmd) -> Result<()> {
 // Shared: load an existing image
 // ---------------------------------------------------------------------------
 
+/// Read an existing image file from disk and wrap it in an [`LfsImage`].
+///
+/// Image geometry is resolved from the TOML config and/or CLI flags,
+/// with the block count derived from the actual file size.
 fn load_image(
     config_path: &Option<PathBuf>,
     cli: &ImageConfigParams,
@@ -386,6 +402,7 @@ fn load_image(
 // unpack
 // ---------------------------------------------------------------------------
 
+/// Extract all files and directories from a LittleFS2 image to a host directory.
 fn cmd_unpack(config_path: &Option<PathBuf>, args: UnpackCmd) -> Result<()> {
     let mut image = load_image(config_path, &args.fs, &args.image)?;
 
@@ -403,6 +420,7 @@ fn cmd_unpack(config_path: &Option<PathBuf>, args: UnpackCmd) -> Result<()> {
     Ok(())
 }
 
+/// Recursively extract a single LFS directory and its children to the host filesystem.
 fn unpack_directory(fs: &MountedFs<'_>, lfs_dir: &str, host_dir: &Path) -> Result<(), LfsError> {
     let entries = fs.read_dir(lfs_dir)?;
 
@@ -431,6 +449,7 @@ fn unpack_directory(fs: &MountedFs<'_>, lfs_dir: &str, host_dir: &Path) -> Resul
 // list
 // ---------------------------------------------------------------------------
 
+/// Print a tree-style listing of every file and directory in a LittleFS2 image.
 fn cmd_list(config_path: &Option<PathBuf>, args: ListCmd) -> Result<()> {
     let mut image = load_image(config_path, &args.fs, &args.image)?;
 
@@ -442,6 +461,7 @@ fn cmd_list(config_path: &Option<PathBuf>, args: ListCmd) -> Result<()> {
     Ok(())
 }
 
+/// Recursively print a single LFS directory using Unicode tree connectors.
 fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, prefix: &str) -> Result<(), LfsError> {
     let entries = fs.read_dir(lfs_dir)?;
     let count = entries.len();
@@ -472,6 +492,7 @@ fn list_directory(fs: &MountedFs<'_>, lfs_dir: &str, prefix: &str) -> Result<(),
 // info
 // ---------------------------------------------------------------------------
 
+/// Print block usage statistics for a LittleFS2 image.
 fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
     let mut image = load_image(config_path, &args.fs, &args.image)?;
 
@@ -497,6 +518,57 @@ fn cmd_info(config_path: &Option<PathBuf>, args: InfoCmd) -> Result<()> {
 // flash
 // ---------------------------------------------------------------------------
 
+/// Return the path where the SHA-256 hash of a flashed file is cached.
+///
+/// Hashes are stored under `target/.flash-cache/` so they are cleaned
+/// by `cargo clean` and already covered by `.gitignore`.
+fn cache_path(file: &Path) -> PathBuf {
+    Path::new("target/.flash-cache").join(format!(
+        "{}.sha256",
+        file.file_name().unwrap().to_string_lossy()
+    ))
+}
+
+/// Returns `Some(hash)` if the file needs flashing, `None` if unchanged.
+fn needs_flash(file: &Path) -> Result<Option<String>> {
+    let bytes =
+        std::fs::read(file).with_context(|| format!("failed to read {}", file.display()))?;
+    let hash = format!("{:x}", Sha256::digest(&bytes));
+
+    let cache = cache_path(file);
+    if cache.exists() {
+        let prev = std::fs::read_to_string(&cache).unwrap_or_default();
+        if prev.trim() == hash {
+            return Ok(None);
+        }
+    }
+    Ok(Some(hash))
+}
+
+/// Record that `file` was successfully flashed by writing its hash to the cache.
+///
+/// Called *after* a successful flash so that an interrupted flash will
+/// be retried on the next run.
+fn mark_flashed(file: &Path, hash: &str) -> Result<()> {
+    let cache = cache_path(file);
+    std::fs::create_dir_all(cache.parent().unwrap())?;
+    std::fs::write(&cache, hash)?;
+    Ok(())
+}
+
+/// Flash firmware and filesystem image to a device.
+///
+/// Intended to be invoked as a Cargo runner (`runner = "littlefs flash"`
+/// in `.cargo/config.toml`) so that `cargo run` triggers a full
+/// flash cycle. The sequence is:
+///
+/// 1. Flash the LittleFS filesystem image (skipped if unchanged).
+/// 2. Flash the firmware binary (always, to preserve normal `cargo run`
+///    behaviour — the firmware command may also start a monitor session).
+///
+/// The filesystem is flashed first because the firmware flash typically
+/// resets the chip and starts execution; the FS must be in place before
+/// the application boots.
 fn cmd_flash(config_path: &Option<PathBuf>, args: FlashCmd) -> Result<()> {
     // Load the config
     let config_path = config_path
@@ -508,13 +580,54 @@ fn cmd_flash(config_path: &Option<PathBuf>, args: FlashCmd) -> Result<()> {
         .flash
         .context("project config file must have [flash] section defined!")?;
 
-    // Get the paths to the binary and the filesystem image
+    // Resolve the firmware binary path: CLI arg (from `cargo run`) takes
+    // priority, then the hardcoded path in [flash.firmware].
     let binary_path = args
         .binary_path
         .or(flash_config.firmware.path)
         .context("no firmware path (pass as argument or set path in [flash.firmware])")?;
 
-    // Run the flash command
+    // Resolve the filesystem image path: explicit config path takes priority,
+    // otherwise derive it from the binary's parent directory (where build.rs
+    // copies it). Only accept the derived path if the file actually exists.
+    let image_path = flash_config
+        .filesystem
+        .path
+        .or_else(|| {
+            binary_path
+                .parent()
+                .map(|dir| dir.join(format!("{}.bin", &config.image.name)))
+                .filter(|p| p.exists())
+        })
+        .context(
+            "no filesystem image found (set path in [flash.filesystem] \
+         or run via `cargo run` so the image can be located automatically)",
+        )?;
+
+    // Flash the filesystem image, but only if it has changed since the last
+    // flash. This avoids unnecessary wear on flash memory for assets that
+    // are typically more static than the firmware itself.
+    if let Some(hash) = needs_flash(&image_path)? {
+        println!("Flashing filesystem image...");
+        run_command(
+            &flash_config.filesystem.command,
+            &[
+                (
+                    "path",
+                    image_path.to_str().context("invalid image file path")?,
+                ),
+                ("address", flash_config.filesystem.address.as_str()),
+            ],
+        )
+        .context("failed to write filesystem binary")?;
+        mark_flashed(&image_path, &hash)?;
+    } else {
+        println!("Filesystem image unchanged, skipping.");
+    }
+
+    // Always flash the firmware to match normal `cargo run` behaviour.
+    // This command may also reset the chip and start a monitor session,
+    // so it must be the last step.
     run_command(
         &flash_config.firmware.command,
         &[(
@@ -524,24 +637,15 @@ fn cmd_flash(config_path: &Option<PathBuf>, args: FlashCmd) -> Result<()> {
     )
     .context("failed to flash binary")?;
 
-    // Write the binary
-    run_command(
-        &flash_config.filesystem.command,
-        &[
-            ("path", "todo path"),
-            ("address", flash_config.filesystem.address.as_str()),
-        ],
-    )
-    .context("failed to write filesystem binary")?;
-
-    // Optionally enter monitoring
-    if let Some(monitor) = &flash_config.monitor {
-        run_command(&monitor.command, &[]).context("failed to enter monitoring")?;
-    };
-
     Ok(())
 }
 
+/// Expand a command template and execute it as a subprocess.
+///
+/// Placeholders like `{path}` and `{address}` in `template` are replaced
+/// with the corresponding values from `vars`. The expanded string is then
+/// split on whitespace and executed. Returns an error if the command is
+/// not found or exits with a non-zero status.
 fn run_command(template: &str, vars: &[(&str, &str)]) -> Result<()> {
     let mut expanded = template.to_string();
     for (key, value) in vars {
@@ -949,5 +1053,242 @@ glob_includes = []
 
         let data = vec![0xFF; 4096 * 32];
         assert!(image_config_for_reading(&None, &cli, &data).is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // apply_cli_overrides: cache_size invalidation
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn overrides_cache_size_recomputed_when_read_size_changes() {
+        // base: read=256, write=256, cache=256
+        let base = test_base_config();
+        let cli = ImageConfigParams {
+            read_size: Some(512),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        // cache_size should be recomputed as max(new_read, old_write) = max(512, 256) = 512
+        assert_eq!(config.read_size, 512);
+        assert_eq!(config.cache_size, 512);
+    }
+
+    #[test]
+    fn overrides_cache_size_recomputed_when_write_size_changes() {
+        let base = test_base_config();
+        let cli = ImageConfigParams {
+            write_size: Some(512),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.write_size, 512);
+        assert_eq!(config.cache_size, 512);
+    }
+
+    #[test]
+    fn overrides_cache_size_recomputed_when_block_size_changes() {
+        // Use a base where cache_size (4096) differs from the default that
+        // resolve() would pick (max(read=256, write=256) = 256), so we can
+        // tell whether the value was carried forward or recomputed.
+        let base = ImageConfig {
+            name: DEFAULT_IMAGE_NAME.into(),
+            block_size: 4096,
+            block_count: 128,
+            read_size: 256,
+            write_size: 256,
+            block_cycles: -1,
+            cache_size: 4096,
+            lookahead_size: 16,
+        };
+        let cli = ImageConfigParams {
+            block_size: Some(512),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        // cache_size recomputed as max(256, 256) = 256, NOT carried forward as 4096
+        // (which would be invalid: 512 % 4096 != 0)
+        assert_eq!(config.cache_size, 256);
+    }
+
+    #[test]
+    fn overrides_cache_size_preserved_when_unrelated_fields_change() {
+        // When only block_count changes, cache_size should carry forward
+        let base = ImageConfig {
+            name: DEFAULT_IMAGE_NAME.into(),
+            block_size: 4096,
+            block_count: 128,
+            read_size: 16,
+            write_size: 512,
+            block_cycles: -1,
+            cache_size: 512,
+            lookahead_size: 16,
+        };
+        let cli = ImageConfigParams {
+            block_count: Some(64),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_count, 64);
+        assert_eq!(config.cache_size, 512); // preserved
+    }
+
+    #[test]
+    fn overrides_explicit_cache_size_always_wins() {
+        let base = test_base_config();
+        let cli = ImageConfigParams {
+            read_size: Some(512),   // would trigger recomputation
+            cache_size: Some(1024), // but explicit wins
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.cache_size, 1024);
+    }
+
+    // -------------------------------------------------------------------------
+    // apply_cli_overrides: lookahead_size invalidation
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn overrides_lookahead_recomputed_when_block_count_changes() {
+        let base = test_base_config(); // block_count=128, lookahead=16
+        let cli = ImageConfigParams {
+            block_count: Some(64),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_count, 64);
+        // lookahead_size recomputed by resolve(), not carried from base
+        assert_ne!(config.lookahead_size, 0);
+    }
+
+    #[test]
+    fn overrides_lookahead_recomputed_when_image_size_changes() {
+        let base = test_base_config();
+        let cli = ImageConfigParams {
+            image_size: Some(4096 * 64),
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.block_count, 64);
+        // lookahead_size recomputed, not carried forward
+        assert_ne!(config.lookahead_size, 0);
+    }
+
+    #[test]
+    fn overrides_lookahead_preserved_when_block_count_unchanged() {
+        let base = test_base_config(); // lookahead=16
+        let cli = ImageConfigParams {
+            block_cycles: Some(100), // unrelated change
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.lookahead_size, 16); // preserved
+    }
+
+    #[test]
+    fn overrides_explicit_lookahead_always_wins() {
+        let base = test_base_config();
+        let cli = ImageConfigParams {
+            block_count: Some(64),    // would trigger recomputation
+            lookahead_size: Some(32), // but explicit wins
+            ..empty_cli()
+        };
+
+        let config = apply_cli_overrides(&base, &cli);
+        assert_eq!(config.lookahead_size, 32);
+    }
+
+    // -------------------------------------------------------------------------
+    // Flash helpers: needs_flash / mark_flashed
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn needs_flash_returns_hash_for_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("new_file_test.bin");
+        fs::write(&file, b"hello").unwrap();
+
+        let result = needs_flash(&file).unwrap();
+        assert!(result.is_some(), "new file should need flashing");
+    }
+
+    #[test]
+    fn needs_flash_returns_none_after_mark_flashed() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("mark_test.bin");
+        fs::write(&file, b"hello").unwrap();
+
+        let hash = needs_flash(&file).unwrap().unwrap();
+        mark_flashed(&file, &hash).unwrap();
+
+        let result = needs_flash(&file).unwrap();
+        assert!(result.is_none(), "unchanged file should not need flashing");
+    }
+
+    #[test]
+    fn needs_flash_returns_hash_after_file_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("changed_test.bin");
+        fs::write(&file, b"hello").unwrap();
+
+        let hash = needs_flash(&file).unwrap().unwrap();
+        mark_flashed(&file, &hash).unwrap();
+
+        // Modify the file
+        fs::write(&file, b"world").unwrap();
+
+        let result = needs_flash(&file).unwrap();
+        assert!(result.is_some(), "modified file should need flashing");
+    }
+
+    #[test]
+    fn needs_flash_errors_on_missing_file() {
+        let result = needs_flash(Path::new("/nonexistent/file.bin"));
+        assert!(result.is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // run_command: template expansion and execution
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn run_command_expands_placeholders() {
+        // `true` ignores arguments and always succeeds
+        run_command(
+            "true {path} {address}",
+            &[("path", "/fw.bin"), ("address", "0x1000")],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_command_no_placeholders() {
+        run_command("true", &[]).unwrap();
+    }
+
+    #[test]
+    fn run_command_nonzero_exit_is_error() {
+        let result = run_command("false", &[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_command_missing_program_is_error() {
+        let result = run_command("nonexistent_binary_that_should_not_exist_xxyz", &[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_command_empty_template_is_error() {
+        let result = run_command("", &[]);
+        assert!(result.is_err());
     }
 }

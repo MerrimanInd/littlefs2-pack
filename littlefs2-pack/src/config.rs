@@ -396,7 +396,6 @@ impl ImageConfig {
 struct RawFlashConfig {
     firmware: RawFirmwareFlash,
     filesystem: RawFilesystemFlash,
-    monitor: Option<MonitorFlash>,
 }
 
 impl RawFlashConfig {
@@ -404,7 +403,6 @@ impl RawFlashConfig {
         Ok(FlashConfig {
             firmware: self.firmware.resolve(base_dir)?,
             filesystem: self.filesystem.resolve(base_dir)?,
-            monitor: self.monitor,
         })
     }
 }
@@ -414,7 +412,6 @@ impl RawFlashConfig {
 pub struct FlashConfig {
     pub firmware: FirmwareFlash,
     pub filesystem: FilesystemFlash,
-    pub monitor: Option<MonitorFlash>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -500,13 +497,6 @@ pub struct FilesystemFlash {
     /// The resolved flash address (either from `address` directly or
     /// looked up from the partition table).
     pub address: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct MonitorFlash {
-    /// The monitor/attach command to run after flashing.
-    pub command: String,
 }
 
 /// Directory traversal settings for collecting files into the image.
@@ -1218,7 +1208,6 @@ address = "0x08060000"
         let flash = config.flash.unwrap();
         assert_eq!(flash.filesystem.address, "0x08060000");
         assert!(flash.filesystem.path.is_none());
-        assert!(flash.monitor.is_none());
     }
 
     #[test]
@@ -1245,27 +1234,6 @@ address = "0x200000"
             flash.filesystem.path.as_deref(),
             Some(Path::new("./build/littlefs.bin"))
         );
-    }
-
-    #[test]
-    fn flash_with_monitor() {
-        let toml = flash_toml(
-            r#"
-[flash.firmware]
-command = "espflash flash {path}"
-
-[flash.filesystem]
-command = "esptool write-flash {address} {path}"
-address = "0x200000"
-
-[flash.monitor]
-command = "espflash monitor --after hard-reset"
-"#,
-        );
-        let config = parse_and_validate(&toml).unwrap();
-        let flash = config.flash.unwrap();
-        let monitor = flash.monitor.unwrap();
-        assert_eq!(monitor.command, "espflash monitor --after hard-reset");
     }
 
     #[test]

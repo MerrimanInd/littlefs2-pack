@@ -101,17 +101,12 @@ path = "/path/to/binary"
 # and writes the image to memory.
 [flash.filesystem]
 command = "esptool --chip esp32s3 --port /dev/ttyACM0 write-flash {address} {path} --flash-size 16MB"
-# The path is optional, if ommitted it will be populated with the image name and the OUT_DIR
-# environment variable
+# The path is optional, if ommitted it will be populated with the image name and
+# the target/<profile> directory where the image is copied by the generate command
 path = "../../target/xtensa-esp32s3-none-elf/release/build/esp32-littlefs-server-e2ca65db453fd1fa/out/filesystem.bin"
 # The address to write the filesystem to
 address = "0x200000"
-# Alternatively, for an ESP32 project, the address can be read from the `partitions.csv` table
+# Alternatively, for an ESP32 project the address can be read from the `partitions.csv` table
 # and the name of the partition. This and the address are mutually exclusive.
 partition_table = "./partitions.csv"
 partition_name = "littlefs"
-
-# The device monitor command runs after the filesystem image write
-# to start a debug session
-[flash.monitor]
-command = "espflash monitor --after hard-reset"

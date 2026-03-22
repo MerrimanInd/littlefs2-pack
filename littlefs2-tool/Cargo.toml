@@ -23,6 +23,7 @@ anyhow = "1.0.102"
 clap = { version = "4.5.60", features = ["derive"] }
 thiserror = "2.0.18"
 littlefs2-pack = { version = "0.2.0", path = "../littlefs2-pack" }
+sha2 = "0.10.9"
 
 [dev-dependencies]
 tempfile = "3"
