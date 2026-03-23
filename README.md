@@ -2,10 +2,9 @@
 
 This project provides a toolbox for deploying [LittleFS filesystems](https://github.com/littlefs-project/littlefs) to Rust embedded projects with as much determinism and robustness as possible. It can pack a directory into a LittleFS image, unpack an image back into its directory structure, and inspect the contents of an image. It can also synchronize a local directory to a microcontroller by building the image and sending it to the micro (if the files have changed) as part of the flashing process.
 
-These tools build off of the Rust LittleFS bindings built by the Trussed Dev team. Their main [`littlefs2`](https://github.com/trussed-dev/littlefs2) is used by the firmware projects themselves to access LittleFS images. These tools use [`littlefs2-sys`](https://github.com/trussed-dev/littlefs2-sys), the low-level C bindings, for the actual packing and unpacking.
+These tools build off of the Rust LittleFS bindings built by the Trussed Dev team. Their main [`littlefs2`](https://github.com/trussed-dev/littlefs2) is used by the firmware projects themselves to access LittleFS images. These tools use [`littlefs2-sys`](https://github.com/trussed-dev/littlefs2-sys), the low-level C bindings, for the actual packing and unpacking so that every parameter of the image can be adjusted at runtime not compile time.
 
 `littlefs2-pack` is tested for compatibility with the C++ [`mklittlefs` project](https://github.com/earlephilhower/mklittlefs). This is ensured with the `cross-compat.rs` test that packs with one tool then unpack with the other, in both directions. These tests are ran against the version of `mklittlefs` in the submodule and requires that tool to be built prior to running the tests.
-
 
 ## LittleFS Config Files
 
@@ -254,3 +253,5 @@ command = "espflash write-bin {address} {path}"
 partition_table = "./partitions.csv"
 partition_name = "littlefs"
 ```
+
+When the `cargo run` command is called for the first time the image will be built and deployed. A SHA256 hash is generated and stored in the target/.flash-cache directory. In successive calls the image will be built, a SHA256 hash computed, but then compared to the cached value. If they match none of the files in the image directory have changed and the image won't be reflashed. Some flash tools have this functionality built in by reading the data at that address and comparing it but this takes longer and isn't supported by all tools.
