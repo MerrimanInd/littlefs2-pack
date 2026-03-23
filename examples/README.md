@@ -19,7 +19,11 @@ This simple example builds a directory, adds it directly to the firmware image w
 ### `esp32-littlefs-server`
 This is the most full-featured example, using all of the LittleFS tools in the repo. It builds a local website containing a simple website into a LittleFS image using `builds.rs`. It flashes both firmware and filesystem with the `littlefs flash` utility. Then firmware image then loads it from the partition and serves it on a WiFi network.
 
-Note that you'll have to set your device to a static IP address on the same subnet as 192.168.13.37 as the example doesn't have a DHCP server. Then access the website at that IP address.
+Note that you'll have to set your device to a static IP address on the same subnet as 192.168.13.37 as the example doesn't have a DHCP server. Then access the website at that IP address. Also this example needs an SSID and PASSWORD environment variable set at compile time. They can be provided with the Cargo command:
+
+```bash
+SSID=RustyCrab PASSWORD=ferris cargo build --release
+```
 
 ## Raspberry Pi Examples
 The RP2350 examples were tested on an [Adafruit RP2350 with 8MB PSRAM](https://www.adafruit.com/product/6130).

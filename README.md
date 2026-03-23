@@ -4,6 +4,9 @@ This project provides a toolbox for deploying [LittleFS filesystems](https://git
 
 These tools build off of the Rust LittleFS bindings built by the Trussed Dev team. Their main [`littlefs2`](https://github.com/trussed-dev/littlefs2) is used by the firmware projects themselves to access LittleFS images. These tools use [`littlefs2-sys`](https://github.com/trussed-dev/littlefs2-sys), the low-level C bindings, for the actual packing and unpacking.
 
+`littlefs2-pack` is tested for compatibility with the C++ [`mklittlefs` project](https://github.com/earlephilhower/mklittlefs). This is ensured with the `cross-compat.rs` test that packs with one tool then unpack with the other, in both directions. These tests are ran against the version of `mklittlefs` in the submodule and requires that tool to be built prior to running the tests.
+
+
 ## LittleFS Config Files
 
 LittleFS images have quite a few configuration options that must match between packing the image and then accessing it on the device. A single source of truth is necessary to maintain this alignment. Factoring in the myriad other configuration options it was logical to store them in a configuration file. This is a TOML file, generally stored at the root of your project repository and named `littlefs.toml`.
