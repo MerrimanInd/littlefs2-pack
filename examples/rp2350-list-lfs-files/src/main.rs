@@ -48,7 +48,7 @@ pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
 
 #[allow(unused)]
 mod lfs_config {
-    include!(concat!(env!("OUT_DIR"), "/littlefs_config.rs"));
+    include!(concat!(env!("OUT_DIR"), "/filesystem.rs"));
 }
 
 // ── Flash-backed read-only Storage ──────────────────────────────────────

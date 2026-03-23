@@ -1,9 +1,0 @@
-[package]
-name = "build-lfs-image"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-
-[build-dependencies]
-littlefs2-pack = { version = "0.3.0", path = "../../littlefs2-pack" }
