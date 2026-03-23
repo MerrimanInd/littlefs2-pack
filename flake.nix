@@ -34,6 +34,11 @@
           pkg-config
         ];
 
+        buildDeps = with pkgs; [
+          mdbook
+          cargo-semver-checks
+        ];
+
         cLibs = with pkgs; [
           libclang.lib
         ];
@@ -66,7 +71,8 @@
             ]
             ++ cDeps
             ++ cLibs
-            ++ rustDeps;
+            ++ rustDeps
+            ++ buildDeps;
 
             LD_LIBRARY_PATH = "${lib.makeLibraryPath (cDeps ++ cLibs)}";
             MKLITTLEFS_CPP = "./mklittlefs/mklittlefs";
