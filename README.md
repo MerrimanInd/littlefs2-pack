@@ -6,6 +6,12 @@ These tools build off of the Rust LittleFS bindings built by the Trussed Dev tea
 
 `littlefs2-pack` is tested for compatibility with the C++ [`mklittlefs` project](https://github.com/earlephilhower/mklittlefs). This is ensured with the `cross-compat.rs` test that packs with one tool then unpack with the other, in both directions. These tests are ran against the version of `mklittlefs` in the submodule and requires that tool to be built prior to running the tests.
 
+# Examples
+
+There are currently three examples in the repo for deploying to ESP32 and Raspberry Pi Pico/RP2350 devices in the `/examples` folder. The most complete of them is `esp32-littlefs-server`, which used the excellent [impl Rust ESP32 tutorial book](https://esp32.implrust.com/wifi/web-server/index.html) as a starting point. It utilizes all of these tools to pack an entire website directory, flash it to an ESP32, and serve it on a Wifi access point. Any changes to the website content are detected at compile time, the image is rebuilt, and flashed to the device.
+
+# Tooling Overview
+
 ## LittleFS Config Files
 
 LittleFS images have quite a few configuration options that must match between packing the image and then accessing it on the device. A single source of truth is necessary to maintain this alignment. Factoring in the myriad other configuration options it was logical to store them in a configuration file. This is a TOML file, generally stored at the root of your project repository and named `littlefs.toml`.
