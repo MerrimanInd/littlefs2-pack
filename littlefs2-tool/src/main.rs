@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 )]
 pub struct Cli {
     /// Path to a littlefs.toml configuration file
-    #[arg(long, short = 'f', global = true)]
+    #[arg(long, short = 'c', global = true)]
     config: Option<PathBuf>,
 
     #[command(subcommand)]
