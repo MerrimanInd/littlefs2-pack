@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "littlefs2-pack"
-version = "0.3.0"
+version = "0.3.2"
 dependencies = [
  "csv",
  "globset",
@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "littlefs2-tool"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",

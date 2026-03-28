@@ -1,10 +1,10 @@
 [package]
 name = "littlefs2-tool"
 description = "A Rust packing and unpacking directories into LittleFS binaries then shipping them to embedded devices"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Xander Cesari <xander@merriman.industries>"]
-repository = "https://github.com/MerrimanInd/littlefs2-pack"
+repository = "https://github.com/MerrimanInd/littlefs-tooling-rs"
 documentation = "https://docs.rs/littlefs2_tool"
 categories = [
   "embedded",
